@@ -1,19 +1,14 @@
 #!/usr/bin/env bash
-# make-appimage.sh — build the unsigned AppImage and publish it (plus update
-# metadata) to GitHub Releases via electron-builder's `publish: github`.
+# make-appimage.sh — build the unsigned AppImage and optionally publish it
+# (plus update metadata) to GitHub Releases via electron-builder.
 #
 # Target repo: https://github.com/jonathonp3/sirius-os-deepseek-harness
-#
-# Requires:
-#   - build.publish configured in package.json (provider: github, owner, repo)
-#   - GH_TOKEN in the environment (repo scope) — electron-builder reads it
-#   - package.json `version` bumped for each release
 #
 # Env overrides:
 #   WORK_DIR   build directory           (default: <repo>/.build)
 #   OUT        artifact output directory (default: <repo>/dist)
-#   PUBLISH    "always" | "never" | "onTag" | "onTagOrDraft"  (default: always)
-#              Set PUBLISH=never for local builds without a token.
+#   PUBLISH    "always" | "never" | "onTag" | "onTagOrDraft"  (default: never)
+#              Set PUBLISH=always (with GH_TOKEN) to publish.
 #   GH_OWNER   (default: jonathonp3)
 #   GH_REPO    (default: sirius-os-deepseek-harness)
 set -euo pipefail
@@ -21,7 +16,6 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_DIR="${WORK_DIR:-$REPO_ROOT/.build}"
 OUT="${OUT:-$REPO_ROOT/dist}"
-# PUBLISH="${PUBLISH:-always}"
 PUBLISH="${PUBLISH:-never}"
 
 GH_OWNER="${GH_OWNER:-jonathonp3}"
@@ -45,6 +39,12 @@ if [ "$PUBLISH" != "never" ] && [ -z "${GH_TOKEN:-}" ]; then
   exit 1
 fi
 
+# Local builds must not see GH_TOKEN, or the patched config writes
+# latest-linux.yml even with --publish never.
+if [ "$PUBLISH" = "never" ]; then
+  unset GH_TOKEN
+fi
+
 cd "$APP_DIR"
 
 # ---------------------------------------------------------------------------
@@ -54,6 +54,8 @@ echo "==> package linux-x64 (unsigned AppImage)"
 echo "    repo:    https://github.com/${GH_OWNER}/${GH_REPO}"
 echo "    publish: $PUBLISH"
 
+# Only forward --publish when actually publishing; the wrapper rejects
+# unknown options on the local path, and "never" is the default behavior.
 PUBLISH_ARGS=()
 if [ "$PUBLISH" != "never" ]; then
   PUBLISH_ARGS=( -- "--publish" "$PUBLISH" )
@@ -109,7 +111,7 @@ if [ -f "$OUT/latest-linux.yml" ]; then
   echo "==> update metadata present: $OUT/latest-linux.yml"
 else
   echo "warning: latest-linux.yml was not produced — auto-update will not work" >&2
-  echo "         check that build.publish is set in package.json and PUBLISH != never" >&2
+  echo "         expected on local builds (PUBLISH=never)"
 fi
 
 if [ "$PUBLISH" != "never" ]; then
