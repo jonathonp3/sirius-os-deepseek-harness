@@ -41,3 +41,4 @@ jobs:
         run: PUBLISH=always make appimage
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+# trigger indexing
