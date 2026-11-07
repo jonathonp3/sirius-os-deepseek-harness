@@ -2,6 +2,9 @@
 %undefine __brp_mangle_shebangs
 %global __requires_exclude_from ^/usr/libexec/deepseek-harness/
 %global __provides_exclude_from ^/usr/libexec/deepseek-harness/
+
+# Replaced at SRPM build time by scripts/build-srpm.sh
+%global _dsh_version @DSH_VERSION@
 %define _dsh_rpm_version %(echo %{_dsh_version} | tr '-' '.')
 
 Name:           sirius-os-deepseek-harness
