@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  appimage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install build dependencies
+        run: ./scripts/toolchain.sh
+
+      - name: Build
+        run: make build
+
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          PKG_VERSION=$(node -p "require('./source-patches/apps/desktop/package.json').version")
+          if [ "v${PKG_VERSION}" != "${GITHUB_REF_NAME}" ]; then
+            echo "error: tag ${GITHUB_REF_NAME} does not match v${PKG_VERSION}" >&2
+            exit 1
+          fi
+
+      - name: Package and publish AppImage
+        run: PUBLISH=always make appimage
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
