@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.jonathonp3.deepseek-harness</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>DeepSeek Harness</name>
+  <summary>Open-source agent harness workspace</summary>
+  <description>
+    <p>
+      DeepSeek Harness is an open-source agent harness built on an
+      everything-is-a-plugin architecture. It provides a complete workspace
+      for running, composing, and managing AI agents, with a bundled runtime
+      for Node.js, pnpm, Python, and the LibreOffice conversion engine.
+    </p>
+    <p>
+      The Linux build is self-contained: Electron, the dsh runtime, and the
+      WASM engines for image and document processing are all bundled, so the
+      application runs without system dependencies beyond glibc and a display
+      server.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.jonathonp3.deepseek-harness.desktop</launchable>
+  <content_rating type="oars-1.1" />
+  <developer id="org.jonathonp3">
+    <name>Jonathon Poppleton</name>
+  </developer>
+  <url type="homepage">https://github.com/jonathonp3/sirius-os-deepseek-harness</url>
+  <url type="bugtracker">https://github.com/jonathonp3/sirius-os-deepseek-harness/issues</url>
+  <url type="vcs-browser">https://github.com/jonathonp3/sirius-os-deepseek-harness</url>
+  <categories>
+    <category>Development</category>
+    <category>Utility</category>
+  </categories>
+  <keywords>
+    <keyword>ai</keyword>
+    <keyword>agent</keyword>
+    <keyword>llm</keyword>
+    <keyword>deepseek</keyword>
+    <keyword>harness</keyword>
+  </keywords>
+  <releases>
+    <release version="0.2.2-alpha.3" date="2026-11-06">
+      <description>
+        <p>Initial Linux desktop build.</p>
+      </description>
+    </release>
+  </releases>
+</component>

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=DeepSeek Harness
+Comment=Agent harness workspace
+Exec=/usr/bin/deepseek-harness %U
+Icon=deepseek-harness
+Terminal=false
+Categories=Development;Utility;
+Keywords=ai;agent;llm;deepseek;
+StartupNotify=true
+StartupWMClass=deepseek-harness
