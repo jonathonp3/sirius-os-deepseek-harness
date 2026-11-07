@@ -3,7 +3,7 @@ WORK_DIR  := $(REPO_ROOT)/.build
 OUT       := $(REPO_ROOT)/dist
 PIN       := $(shell cat $(REPO_ROOT)/PIN 2>/dev/null || echo '')
 
-.PHONY: all build tarball appimage rpm clean repin check-pin
+.PHONY: all build tarball appimage srpm clean repin check-pin toolchain
 
 all: build tarball appimage rpm
 
@@ -22,8 +22,8 @@ tarball:
 appimage:
 	./scripts/make-appimage.sh
 
-rpm:
-	./scripts/make-rpm.sh
+srpm:
+	./scripts/build-srpm.sh
 
 clean:
 	rm -rf $(WORK_DIR) $(OUT)
