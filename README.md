@@ -6,6 +6,9 @@ on Fedora. Produces a self-contained **RPM** (hosted on
 and an **AppImage** (hosted on
 [GitHub Releases](https://github.com/jonathonp3/sirius-os-deepseek-harness/releases)).
 
+---
+
+
 ## Install
 
 ### Atomic systems (Silverblue, Kinoite, Bazzite, Aurora, …)
@@ -38,79 +41,63 @@ Launch from the application menu, or:
 deepseek-harness
 ```
 
+---
+
+
 ## What this project is
 
-This repository is effectively a downstream fork of upstream DeepSeek
-Harness, but it does not vendor the source. Instead, it is a
-packaging pipeline that:
+This repository is a downstream packaging pipeline for upstream DeepSeek Harness. It does not vendor the upstream source. Instead, it:
 
-    1. Clones upstream at a pinned commit (recorded in PIN).
+1. Clones upstream at the commit recorded in `PIN`.
+2. Applies a curated set of patches from `source-patches/`.
+3. Builds the desktop Electron app and packages it as:
+   - An RPM with a self-contained payload in `/usr/libexec/deepseek-harness/`
+   - An AppImage containing the same payload in a single runnable file
+4. Publishes the RPM to COPR and the AppImage to GitHub Releases through CI when a version tag is pushed.
 
-    2. Applies a curated set of source patches (source-patches/)
-       on top.
+Each release is rebuilt from the pinned upstream commit and the patch set. There is no compiled-once, shipped-forever binary, so the relationship to upstream remains explicit and reproducible.
 
-    3. Builds the desktop Electron app and packages it two ways:
 
-         RPM with a self-contained payload at /usr/libexec/deepseek-harness/
-
-         AppImage with the same payload inside a single runnable file
-
-    4. Publishes the RPM to COPR and the AppImage to GitHub Releases,
-       both from CI on a version tag.
-
-There is no compiled-once, shipped-forever binary. Every release is
-rebuilt from the pinned upstream commit plus the patches, so the
-relationship to upstream is explicit and reproducible.
+---
 
 
 ## Why a fork?
 
-Upstream DeepSeek Harness is an Electron app distributed as a signed
-binary for macOS and Windows, with Linux support at an early stage.
-Running it on Fedora (particularly Fedora Atomic / Silverblue)
-needs several changes upstream does not ship:
+Upstream DeepSeek Harness is an Electron app distributed as signed binaries for macOS and Windows, while Linux support is still at an early stage. Running it on Fedora—especially Fedora Atomic/Silverblue—requires changes that upstream does not currently provide.
 
-    Linux packaging: the upstream build expects macOS/Windows
-    electron-builder targets. This repo adds an unsigned Linux x64
-    target and produces both an RPM and an AppImage.
+This fork adds:
 
-    Atomic-host installability: on Fedora Atomic, software is layered
-    onto the immutable root filesystem, not installed from tarballs.
-    The RPM puts the payload at **/usr/libexec/** and adds a desktop entry,
-    icon, and appdata, so **rpm-ostree** install works and the app appears
-    in the menu.
+- **Linux packaging:** Adds an unsigned Linux x64 build target and produces RPM and AppImage packages.
+- **Atomic-host installability:** Fedora Atomic installs software onto its immutable root filesystem rather than from tarballs. The RPM places the app payload in `/usr/libexec/` and includes a desktop entry, icon, and appdata, allowing installation with `rpm-ostree` and adding the app to the desktop menu.
+- **Fedora-native updates:** AppImage users receive updates through `electron-updater` and the GitHub Releases feed. RPM users receive updates through `rpm-ostree upgrade` or `dnf upgrade` via COPR.
+- **Linux fixes:** `source-patches/` contains the minimal changes needed to build and run on Linux, including update-feed wiring and package-target fixes. The patches are kept small, reviewed, and reapplied against each new pin.
 
-    Automatic updates from a Fedora-native source: **electron-updater**
-    is wired to the GitHub Releases feed, so AppImage users get deltas
-    directly; RPM users get updates through **rpm-ostree upgrade** /
-    **dnf upgrade** via COPR.
+The goal is to stay close to upstream, carrying only the changes needed to make the app installable, updatable, and well integrated with Fedora—especially Fedora Atomic.
 
-    **Patches for known Linux issues:** `source-patches/` contains the
-    minimal changes needed to build and run on Linux (auto-update feed
-    wiring, package target fixes). They are kept small, reviewed, and
-    re-applied against each new pin.
+
+---
 
 The goal is not to diverge from upstream. It is to track upstream
 closely and carry only what is required to make the app installable,
 updatable, and well-integrated on Fedora — Atomic in particular.
 
-Reproducibility
+### Reproducibility
 
 Every released artifact is produced from:
 
-    the upstream commit recorded in **PIN**
-
-    the patch set in **source-patches/**
-
-    the packaging files in **packaging/**
-
-    the build scripts in **scripts/**
+- the upstream commit recorded in **PIN**
+- the patch set in **source-patches/**
+- the packaging files in **packaging/**
+- the build scripts in **scripts/**
 
 Pin and patches are committed together, so checking out any release
 tag and running the pipeline reproduces the same binaries. Upstream
 moves fast, so re-pinning is a deliberate, tested step — not automatic
 on every upstream commit.
-Building locally
+
+---
+
+## Building locally
 
 Requires Fedora (or a Fedora container), make, sudo for installing
 build dependencies, and rpmbuild for the RPM.
@@ -149,13 +136,13 @@ make all                    # full local validation
 
 ## CI
 
-Two GitHub Actions workflows run on a version tag (v*) or manually:
+Two GitHub Actions workflows run when a version tag (`v*`) is pushed or when manually triggered:
 
-    **.github/workflows/release.yml** — builds the AppImage on Ubuntu and publishes it to the GitHub Release for the tag.
+- `.github/workflows/release.yml` builds the AppImage on Ubuntu and publishes it to the GitHub Release for that tag.
+- `.github/workflows/copr.yml` builds the SRPM in a Fedora container and submits it to COPR. The SRPM is also attached to the GitHub Release.
 
-    **.github/workflows/copr.yml** — builds the SRPM in a Fedora container and submits it to COPR. The SRPM is also attached to the GitHub Release.
+The version in `source-patches/apps/desktop/package.json` must match the tag, without the leading `v` (for example, tag `v0.2.2-alpha.3` matches version `0.2.2-alpha.3`). Both workflows verify this on tag pushes.
 
-The version in **source-patches/apps/desktop/package.json** must match the tag (v0.2.2-alpha.3 ⇔ 0.2.2-alpha.3); both workflows verify this on tag pushes.
 
 ## Layout
 
@@ -175,15 +162,13 @@ The version in **source-patches/apps/desktop/package.json** must match the tag (
 └── source-patches/         # patches applied on top of the pinned upstream commit
 ```
 
-Notes
+## Notes
 
-    **make build** and make **repin** abort early if **PIN** is empty.
+- `make build` and `make repin` stop early if `PIN` is empty.
+- `make repin` overwrites `source-patches/` with files from the fresh clone. Review `git diff source-patches/` before committing.
+- `dist/` and `.build/` are gitignored.
+- The AppImage is unsigned. RPMs built by COPR are also unsigned; COPR signing applies only when a package is promoted to a Fedora repository.
 
-    **make repin** overwrites **source-patches/** with the files from the fresh clone, so review **git diff source-patches/** before committing.
-
-    **dist/** and **.build/** are gitignored.
-
-    The AppImage is unsigned. RPMs built by COPR are unsigned as well — Fedora's COPR signing applies only when a package is promoted to a Fedora repository.
 
 ## License
 
