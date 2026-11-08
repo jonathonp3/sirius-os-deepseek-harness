@@ -5,7 +5,7 @@ PIN       := $(shell cat $(REPO_ROOT)/PIN 2>/dev/null || echo '')
 
 .PHONY: all build tarball appimage srpm clean repin check-pin toolchain
 
-all: build tarball appimage rpm
+all: build tarball appimage srpm
 
 toolchain:
 	./scripts/toolchain.sh
