@@ -20,8 +20,7 @@ jobs:
 
       - name: Enable pnpm
         run: |
-          corepack enable
-          corepack prepare pnpm@11.28.5 --activate
+          npm install -g pnpm@11.28.5
 
       - name: Build unpacked tree
         run: make build
