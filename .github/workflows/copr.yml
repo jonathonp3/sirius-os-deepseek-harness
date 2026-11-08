@@ -14,9 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install container basics
         run: |
-          dnf install -y git nodejs22 nodejs22-npm rpm-build rpmdevtools copr-cli patchelf
+          dnf install -y git rpm-build rpmdevtools copr-cli patchelf
+      - name: Install toolchain
+        run: ./scripts/toolchain.sh
 
       - name: Enable pnpm
         run: |
