@@ -74,9 +74,6 @@ This fork adds:
 
 The goal is to stay close to upstream, carrying only the changes needed to make the app installable, updatable, and well integrated with Fedora—especially Fedora Atomic.
 
-
----
-
 The goal is not to diverge from upstream. It is to track upstream
 closely and carry only what is required to make the app installable,
 updatable, and well-integrated on Fedora — Atomic in particular.
