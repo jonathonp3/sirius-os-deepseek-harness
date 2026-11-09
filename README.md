@@ -102,7 +102,7 @@ a re-pin.
 
 | File | Meaning | When it changes |
 |---|---|---|
-| `PIN` | The upstream commit to build. `build-linux.sh` reads it to check out the commit before applying patches. | Whenever you decide to move to a new upstream commit. |
+| `PIN` | The upstream commit to build. `build-linux.sh` reads it to check out the commit before applying patches. | Whenever I decide to move to a new upstream commit. |
 | `PIN_BASELINE` | The upstream commit the patches in `source-patches/` were generated against. `check-drift.sh` reads it to determine which baseline to compare against. | — |
 
 
