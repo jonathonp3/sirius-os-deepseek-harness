@@ -1,0 +1,127 @@
+--- a/apps/desktop/scripts/electron-builder-config.mjs
++++ b/apps/desktop/scripts/electron-builder-config.mjs
+@@ -66,17 +66,32 @@
+   if (skipNotarization && (unsigned || resolvedPlatform !== 'darwin')) throw new Error('Skipping notarization requires a signed macOS build')
+   const packagesMacOS = targetPlatform === 'darwin' || (targetPlatform === undefined && hostPlatform === 'darwin')
+   const packagesWindows = resolvedPlatform === 'win32'
+-  const policy = packagesMacOS && unsigned ? undefined : resolveDesktopPolicyEnvironment(env)
++  // Linux is never signed, never notarized, and never has an update feed in the first pass.
++  // The `unsigned` flag is meaningless on Linux; treat it as always-on so downstream hooks
++  // (afterSign, artifactBuildCompleted) skip the signing branches cleanly.
++  const packagesLinux = resolvedPlatform === 'linux'
++  const linuxEffectiveUnsigned = packagesLinux || unsigned
++  const policy = packagesMacOS && unsigned ? undefined : packagesLinux ? undefined : resolveDesktopPolicyEnvironment(env)
+   if (resolvedPlatform === 'win32') installWindowsDirectoryInstaller()
+   const macOSSigning = packagesMacOS && !unsigned ? resolveMacOSSigningEnvironment(env) : undefined
+   if (packagesMacOS && !unsigned && !skipNotarization) resolveMacOSNotarizationEnvironment(env)
+   const buildPaths = desktopTargetBuildPaths(resolveDesktopBuildTarget(env, hostPlatform, hostArch), env)
+-  const output = desktopArtifactOutput(buildPaths, { unsigned, skipNotarization })
++  const output = desktopArtifactOutput(buildPaths, { unsigned: linuxEffectiveUnsigned, skipNotarization })
+   let primaryRuntimeDestination
+   let dshDestination
+   let windowsCode = []
+   const unpack = ['**/*.{node,dylib,dll,so,exe}', '**/*.so.*', '**/spawn-helper', '**/@vscode/ripgrep-*/bin/rg',
+     `**/node_modules/@deepseek-ai/libreoffice-kit-${resolvedPlatform}-${resolvedArch}/**/*`,
++    // The Office skill spawns the kit's CLI as a subprocess, and a subprocess cannot read
++    // from the ASAR virtual filesystem. On macOS/Windows the native kit package above
++    // carries the CLI; on Linux, where the engine is WASM, the shared kit carries it, so
++    // the shared kit's files must also live on disk where the subprocess can find them.
++    '**/node_modules/@deepseek-ai/libreoffice-kit/**/*',
++    // The kit's CLI runs under plain Node (not Electron), so its transitive dependencies —
++    // fontkit, fflate, koffi, saxes, and their closures — must also be on disk. Rather than
++    // enumerate a list that changes as the kit's dependencies change, unpack the whole
++    // runtime node_modules so any module the CLI imports resolves.
++    '**/dsh/node_modules/**/*',
+     // LaunchServices opens the Computer Use helper as an application, so every file of its bundles stays on disk.
+     // Both architectures ship: they form one notarized payload whose manifest staging verifies as a whole.
+     '**/node_modules/@deepseek-ai/dsh-experimental-cua-macos/native/bin/**/*']
+@@ -99,7 +114,14 @@
+   if (windowsSigner !== undefined) {
+     installWindowsNsisBootstrapSigner({ sign: windowsSigner })
+   }
+-  const update = unsigned ? undefined : resolveDesktopAutoUpdateConfig(env, resolvedPlatform, resolvedArch)
++  // Linux omits the internal update feed in the first pass; the AppImage is distributed as a
++  // downloadable artifact, and auto-update can be added after the AppImageUpdater path
++  // is qualified against a real feed. When GH_TOKEN is present, publish to GitHub Releases
++  // instead, which produces latest-linux.yml for electron-updater's github provider.
++  const update = linuxEffectiveUnsigned ? undefined : resolveDesktopAutoUpdateConfig(env, resolvedPlatform, resolvedArch)
++  const githubPublish = packagesLinux && env.GH_TOKEN !== undefined && env.GH_TOKEN !== ''
++    ? { provider: 'github', owner: 'jonathonp3', repo: 'sirius-os-deepseek-harness' }
++    : undefined
+   if (preparedRuntime !== undefined) buildPaths.dsh = preparedRuntime
+   // electron-builder merges extraMetadata into the packaged manifest, so a build version here reaches
+   // the artifact names, the update feed, and the installed app.getVersion() the updater compares against.
+@@ -189,6 +211,18 @@
+       writeUpdateInfo: false,
+     },
+     beforePack: async context => {
++      // Linux skips Office unpacking in the first pass; `officePackageDirectories` needs a
++      // Linux-aware implementation before the skill can ship inside the AppImage.
++      if (packagesLinux) {
++        if (windowsSigner !== undefined) {
++          primaryRuntimeDestination = join(context.appOutDir, 'resources', 'runtime', 'primary-runtime')
++          dshDestination = join(context.appOutDir, 'resources', 'app.asar.unpacked', 'dsh')
++        }
++        if (policy === undefined) return
++        const { resolveDesktopPolicyConfig } = await import('../lib/types/mandatory-update-policy.js')
++        resolveDesktopPolicyConfig(policy)
++        return
++      }
+       const office = await officePackageDirectories(buildPaths.dsh, { platform: resolvedPlatform, arch: resolvedArch })
+       const patterns = office.map(directory => `**/${relative(buildPaths.dsh, directory).split(sep).join('/')}/**/*`)
+       const existing = context.packager.config.asarUnpack ?? []
+@@ -217,6 +251,7 @@
+       if (packagesWindows && unsigned) await verifyWindowsAsarUnpack(buildPaths.dsh, resourcesDir, windowsCode)
+     },
+     afterSign: async context => {
++      if (packagesLinux) return
+       if (windowsSigner !== undefined) {
+         await signWindowsCode(context.appOutDir, {
+           thumbprint: new X509Certificate(await readFile(env.DSH_DESKTOP_WINDOWS_CER_FILE)).fingerprint.replaceAll(':', ''),
+@@ -234,6 +269,7 @@
+       verifyMacOSSignatureAfterSign(context, macOSSigning ?? resolveMacOSSigningEnvironment(env))
+     },
+     artifactBuildCompleted: artifact => {
++      if (packagesLinux) return
+       if (unsigned || !artifact.file.endsWith('.dmg')) return
+       if (skipNotarization) {
+         verifyMacOSDiskImageSignature(artifact.file, macOSSigning ?? resolveMacOSSigningEnvironment(env))
+@@ -256,8 +292,28 @@
+       target: ['nsis'],
+     },
+     linux: {
++      icon: fileURLToPath(new URL('../resources/icon-linux.png', import.meta.url)),
+       category: 'Development',
++      // AppImage is the only target that runs on every distro without a package manager.
++      // deb and rpm are deliberately omitted: they duplicate electron-updater's feed logic
++      // for no user benefit on an immutable Fedora host.
+       target: ['AppImage'],
++      // Match the executable name the desktop entry's Exec= refers to.
++      executableName: 'deepseek-harness',
++      // Electron 44 defaults WM_CLASS to the product name, which does not match the
++      // `deepseek-harness.desktop` filename this build installs. syncDesktopName rewrites
++      // the generated entry's StartupWMClass to the desktopName in package.json, so the
++      // window groups under the right launcher icon.
++      syncDesktopName: true,
++      desktop: {
++        entry: {
++          Name: 'DeepSeek Harness',
++          Comment: 'Agent harness workspace',
++          Categories: 'Development;Utility;',
++          Keywords: 'ai;agent;llm;deepseek;',
++          StartupWMClass: 'deepseek-harness',
++        },
++      },
+     },
+     nsis: {
+       uninstallDisplayName: '${productName}',
+@@ -272,6 +328,8 @@
+       differentialPackage: true,
+     },
+     detectUpdateChannel: false,
+-    publish: update === undefined ? null : [{ provider: 'generic', url: update.publicUrl, channel: update.channel }],
++    publish: githubPublish !== undefined
++      ? [githubPublish]
++      : update === undefined ? null : [{ provider: 'generic', url: update.publicUrl, channel: update.channel }],
+   }
+ }

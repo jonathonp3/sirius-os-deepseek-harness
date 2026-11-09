@@ -1,0 +1,20 @@
+--- a/apps/desktop/scripts/desktop-toolchain-preflight.ts
++++ b/apps/desktop/scripts/desktop-toolchain-preflight.ts
+@@ -75,7 +75,7 @@
+  * @returns Every probe that failed, empty when the host can run the packaging sequence.
+  */
+ export async function probeDesktopToolchain(
+-  platform: 'darwin' | 'win32',
++  platform: 'darwin' | 'win32' | 'linux',
+   environment: NodeJS.ProcessEnv = process.env,
+ ): Promise<readonly DesktopToolchainProbeFailure[]> {
+   const failures: DesktopToolchainProbeFailure[] = []
+@@ -92,7 +92,7 @@
+  * @returns Resolves when every probe passes.
+  */
+ export async function requireDesktopToolchain(
+-  platform: 'darwin' | 'win32',
++  platform: 'darwin' | 'win32' | 'linux',
+   environment: NodeJS.ProcessEnv = process.env,
+ ): Promise<void> {
+   const failures = await probeDesktopToolchain(platform, environment)

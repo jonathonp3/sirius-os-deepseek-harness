@@ -32,10 +32,13 @@ repin: check-pin
 	@echo "==> repin to $(PIN)"
 	@echo "$(PIN)" > PIN
 	rm -rf $(WORK_DIR)
+	@echo "==> checking patch drift"
+	./scripts/check-drift.sh || { \
+	  echo "resolve conflicts, regenerate .patch files, then re-run" >&2; \
+	  exit 1; \
+	}
+	@echo "==> building with reconciled patches"
 	./scripts/build-linux.sh --pin $(PIN)
-	@echo "==> build succeeded; refreshing source-patches"
-	@for f in $$(cd source-patches && find apps -type f); do \
-	  cp "$(WORK_DIR)/deepseek-harness/$$f" "source-patches/$$f"; \
-	done
-	@echo "==> review with: git diff source-patches/"
-
+	@echo "==> build succeeded; update baseline"
+	@echo "$(PIN)" > PIN_BASELINE
+	@echo "==> review: git diff source-patches/ PIN_BASELINE"

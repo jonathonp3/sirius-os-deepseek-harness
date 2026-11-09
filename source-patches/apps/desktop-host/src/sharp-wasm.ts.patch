@@ -1,0 +1,79 @@
+--- /dev/null
++++ b/apps/desktop-host/src/sharp-wasm.ts
+@@ -0,0 +1,76 @@
++/** Keep Linux `sharp` off its native backends, whose bundled GLib collides with the one Electron links, so it runs its WebAssembly build. */
++import { createRequire, registerHooks, type ModuleHooks } from 'node:module'
++import { readFileSync } from 'node:fs'
++import { join } from 'node:path'
++
++/** The WebAssembly build of `sharp` that Linux packages carry instead of the native backends. */
++export const SHARP_WASM_PACKAGE = '@img/sharp-wasm32'
++
++/** A native Linux `sharp` or `libvips` package, as `sharp` requests it. */
++const SHARP_LINUX_NATIVE = /^@img\/sharp-(?:libvips-)?linux(?:musl)?-[^/]+(?:\/|$)/u
++
++function missingModule(specifier: string): Error {
++  const error = new Error(`Cannot find module '${specifier}'`) as NodeJS.ErrnoException
++  error.code = 'MODULE_NOT_FOUND'
++  return error
++}
++
++function isMissingModule(error: unknown): boolean {
++  return (error as NodeJS.ErrnoException | undefined)?.code === 'MODULE_NOT_FOUND'
++}
++
++/**
++ * Run Linux `sharp` on WebAssembly.
++ *
++ * Electron's Linux executable links the system GLib, so its `g_object_*` symbols come first in every
++ * process it starts, the Node-mode Host included. `@img/sharp-libvips-linux-*` carries its own static
++ * GLib, and the native addon's `g_object_unref` binds to Electron's copy for objects its own copy
++ * created: image work fails GObject type checks and eventually crashes the Host with SIGSEGV, the
++ * conflict sharp's `SharpElectronLinux` warning names. Refusing the native packages makes `sharp` fall
++ * back to `@img/sharp-wasm32`, which Electron serves from the archive like any other package, the
++ * worker threads it starts included. Packaging omits the native Linux packages too, so only a
++ * Profile's own `sharp` meets the refusal; when that `sharp` brings no WebAssembly build, it gets the
++ * runtime's copy only from the same release, because another release's binding does not match its
++ * JavaScript. Hooks apply only to this thread.
++ * @param runtimeDir - Prepared or archived runtime directory.
++ * @param platform - Platform the Host runs on.
++ * @returns Installed resolver for the Host lifetime, or undefined off Linux.
++ */
++export function installSharpWasmResolution(runtimeDir: string, platform: NodeJS.Platform = process.platform): ModuleHooks | undefined {
++  if (platform !== 'linux') return undefined
++  const runtimeRequire = createRequire(join(runtimeDir, 'package.json'))
++  let bundled: string | null | undefined
++  const bundledVersion = (): string | null => {
++    if (bundled === undefined) {
++      try {
++        bundled = (JSON.parse(readFileSync(runtimeRequire.resolve(`${SHARP_WASM_PACKAGE}/package`), 'utf8')) as { version?: string }).version ?? null
++      } catch { bundled = null }
++    }
++    return bundled
++  }
++  return registerHooks({
++    resolve(specifier, context, nextResolve) {
++      if (SHARP_LINUX_NATIVE.test(specifier)) throw missingModule(specifier)
++      if (specifier !== SHARP_WASM_PACKAGE && !specifier.startsWith(`${SHARP_WASM_PACKAGE}/`)) return nextResolve(specifier, context)
++      try {
++        return nextResolve(specifier, context)
++      } catch (cause) {
++        if (!isMissingModule(cause)) throw cause
++        // A profile's own sharp may lack the WASM build; fall back to the runtime's copy only when
++        // the versions match, because a different release's binding does not match its JavaScript.
++        const requester = (context as { parentURL?: string }).parentURL
++        if (requester === undefined) throw cause
++        const requesterDir = requester.startsWith('file:') ? decodeURIComponent(new URL('.', requester).pathname) : undefined
++        if (requesterDir === undefined) throw cause
++        try {
++          const requesterRequire = createRequire(join(requesterDir, 'package.json'))
++          const requesterSharp = JSON.parse(readFileSync(requesterRequire.resolve('sharp/package.json'), 'utf8')) as { version?: string }
++          if (requesterSharp.version !== bundledVersion()) throw cause
++        } catch {
++          throw cause
++        }
++        return nextResolve(runtimeRequire.resolve(specifier), context)
++      }
++    },
++  })
++}

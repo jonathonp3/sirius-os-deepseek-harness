@@ -1,14 +1,4 @@
 #!/usr/bin/env bash
-# linux-build-patch.sh — turn a fresh deepseek-harness clone into a Linux build target.
-#
-# Usage:
-#   ./linux-build-patch.sh <repo-root>
-#   ./linux-build-patch.sh --check <repo-root>
-#
-# Copies 23 source files (modified or new) from the sibling source-patches/ tree
-# into the target clone. Idempotent: running twice is a no-op. --check reports
-# which files differ.
-
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,61 +6,50 @@ SOURCE_PATCHES_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)/source-patches"
 
 CHECK=0
 [[ "${1:-}" == "--check" ]] && { CHECK=1; shift; }
-REPO_ROOT="${1:?usage: linux-build-patch.sh [--check] <repo-root>}"
-cd "$REPO_ROOT"
+CLONE="${1:?usage: linux-build-patch.sh [--check] <clone-root>}"
+cd "$CLONE"
 
 if [[ ! -f package.json ]] || [[ ! -d apps/desktop ]]; then
-  echo "error: $REPO_ROOT does not look like the deepseek-harness repo" >&2
-  exit 1
-fi
-if [[ ! -d "$SOURCE_PATCHES_ROOT" ]]; then
-  echo "error: source-patches/ not found next to scripts/ ($SOURCE_PATCHES_ROOT)" >&2
+  echo "error: $CLONE does not look like the deepseek-harness repo" >&2
   exit 1
 fi
 
-APPLIED=0
-SKIPPED=0
-FAILED=0
+echo "==> $CLONE"
 
-copy_source() {
-  local rel="$1"
-  local src="$SOURCE_PATCHES_ROOT/apps/$rel"
-  local dst="apps/$rel"
-  if [[ ! -f "$src" ]]; then
-    echo "  MISSING source: $src"
-    FAILED=$((FAILED + 1))
-    return
-  fi
-  if [[ -f "$dst" ]] && cmp -s "$src" "$dst"; then
-    if [[ $CHECK -eq 1 ]]; then echo "  ok:   $rel"; else echo "  skip: $rel (identical)"; fi
-    SKIPPED=$((SKIPPED + 1))
-    return
-  fi
+copy_ok=0; copy_new=0; copy_diff=0; patch_clean=0; patch_conflict=0; patch_applied=0; patch_failed=0
+
+while IFS= read -r full; do
+  rel="${full#"$SOURCE_PATCHES_ROOT/"}"
   if [[ $CHECK -eq 1 ]]; then
-    echo "  diff: $rel"
-    APPLIED=$((APPLIED + 1))
-    return
+    if [[ ! -f "$rel" ]]; then echo "  copy-new:  $rel"; copy_new=$((copy_new+1))
+    elif cmp -s "$full" "$rel"; then echo "  copy-ok:   $rel"; copy_ok=$((copy_ok+1))
+    else echo "  copy-diff: $rel"; copy_diff=$((copy_diff+1)); fi
+  else
+    mkdir -p "$(dirname "$rel")"; cp "$full" "$rel"; echo "  copy: $rel"
   fi
-  mkdir -p "$(dirname "$dst")"
-  cp "$src" "$dst"
-  echo "  copy: $rel"
-  APPLIED=$((APPLIED + 1))
-}
+done < <(find "$SOURCE_PATCHES_ROOT" -type f ! -name '*.patch' ! -name '*.orig' | sort)
 
-echo "==> $REPO_ROOT"
-echo "==> source-patches: $SOURCE_PATCHES_ROOT"
-echo ""
+while IFS= read -r patch; do
+  rel="${patch#"$SOURCE_PATCHES_ROOT/"}"; rel="${rel%.patch}"
+  if [[ $CHECK -eq 1 ]]; then
+    if patch -p1 --forward --dry-run --silent < "$patch" >/dev/null 2>&1; then
+      echo "  clean:     $rel"; patch_clean=$((patch_clean+1))
+    else
+      echo "  CONFLICT:  $rel"; patch_conflict=$((patch_conflict+1))
+    fi
+  else
+    if patch -p1 --forward --silent < "$patch" >/dev/null 2>&1; then
+      echo "  apply: $rel"; patch_applied=$((patch_applied+1))
+    else
+      echo "  FAILED: $rel"; patch_failed=$((patch_failed+1))
+    fi
+  fi
+done < <(find "$SOURCE_PATCHES_ROOT" -name '*.patch' | sort)
 
-while IFS= read -r src; do
-  rel="${src#"$SOURCE_PATCHES_ROOT/apps/"}"
-  copy_source "$rel"
-done < <(find "$SOURCE_PATCHES_ROOT/apps" -type f | sort)
-
-echo ""
 if [[ $CHECK -eq 1 ]]; then
-  echo "==> check: $SKIPPED ok, $APPLIED differ, $FAILED missing source"
-  [[ $FAILED -eq 0 ]] || exit 1
+  echo "==> check: $copy_ok copy-ok, $copy_new copy-new, $copy_diff copy-diff, $patch_clean clean, $patch_conflict conflict"
+  [[ $copy_diff -eq 0 && $patch_conflict -eq 0 ]] || exit 1
 else
-  echo "==> done: $APPLIED copied, $SKIPPED identical, $FAILED failed"
-  [[ $FAILED -eq 0 ]] || exit 1
+  echo "==> done: $patch_applied applied, $patch_failed failed"
+  [[ $patch_failed -eq 0 ]] || exit 1
 fi

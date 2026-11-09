@@ -1,0 +1,20 @@
+--- a/apps/desktop-host/src/index.ts
++++ b/apps/desktop-host/src/index.ts
+@@ -18,12 +18,17 @@
+ import { installPlatformSessionPublisher } from './platform-session.ts'
+ import { installOfficeEngineResolution } from './office-engine.ts'
+ import { installOperationDiagnostics } from './operation-diagnostics.ts'
++import { installSharpWasmResolution } from './sharp-wasm.ts'
+ 
+ async function main(): Promise<void> {
+   const runId = randomUUID() as PluginOperationRunId
+   if (process.connected) process.send?.({ type: 'starting', runId }, (error) => { if (error !== null) console.error(error) })
+   const runtimeDir = process.argv[2] as string
+   const projectDir = process.argv[3] as string
++  // Linux: refuse sharp's native backends so it runs its WebAssembly build. The
++  // native Linux backend links its own static GLib, which collides with Electron's,
++  // and image work crashes the Host with SIGSEGV. Off Linux the hook is a no-op.
++  installSharpWasmResolution(runtimeDir, process.platform)
+   installOfficeEngineResolution(runtimeDir)
+   const installAnchor = join(runtimeDir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')
+   const profile = loadProfileDirectory('dsh', projectDir, installAnchor)

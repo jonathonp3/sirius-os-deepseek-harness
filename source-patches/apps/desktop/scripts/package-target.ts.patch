@@ -1,0 +1,171 @@
+--- a/apps/desktop/scripts/package-target.ts
++++ b/apps/desktop/scripts/package-target.ts
+@@ -48,14 +48,14 @@
+ const AUTOMATIC_BUILD_VERSION = 'auto'
+ 
+ /** Fixed platform and architecture identifiers exposed by package scripts. */
+-export type DesktopPackageTargetName = 'mac-arm64' | 'mac-x64' | 'win-x64'
++export type DesktopPackageTargetName = 'mac-arm64' | 'mac-x64' | 'win-x64' | 'linux-x64'
+ 
+ /** One supported release target and its electron-builder selectors. */
+ export interface DesktopPackageTarget {
+   readonly name: DesktopPackageTargetName
+-  readonly platform: 'darwin' | 'win32'
++  readonly platform: 'darwin' | 'win32' | 'linux'
+   readonly arch: 'arm64' | 'x64'
+-  readonly builderPlatform: '--mac' | '--win'
++  readonly builderPlatform: '--mac' | '--win' | '--linux'
+   readonly builderArch: '--arm64' | '--x64'
+ }
+ 
+@@ -81,6 +81,13 @@
+     builderPlatform: '--win',
+     builderArch: '--x64',
+   },
++  'linux-x64': {
++    name: 'linux-x64',
++    platform: 'linux',
++    arch: 'x64',
++    builderPlatform: '--linux',
++    builderArch: '--x64',
++  },
+ }
+ 
+ /**
+@@ -184,6 +191,12 @@
+   if (target.platform === 'darwin' && hostPlatform !== 'darwin') {
+     throw new Error(`desktop package: ${name} requires a macOS build host`)
+   }
++  if (target.platform === 'linux' && hostPlatform !== 'linux') {
++    throw new Error(`desktop package: ${name} requires a Linux build host`)
++  }
++  if (name === 'linux-x64' && hostArch !== 'x64') {
++    throw new Error('desktop package: linux-x64 requires an x86_64 Linux build host')
++  }
+   if (name === 'mac-arm64' && hostArch !== 'arm64') {
+     throw new Error('desktop package: mac-arm64 requires an Apple Silicon build host')
+   }
+@@ -202,6 +215,8 @@
+   readonly check: boolean
+   /** Build identifier to publish under, when this build does not publish the product version. */
+   readonly requestedBuildVersion: string | undefined
++  /** electron-builder publish mode (`--publish`); defaults to `never`. */
++  readonly publish: string
+ }
+ 
+ function hostTargetName(platform: NodeJS.Platform, arch: string): DesktopPackageTargetName {
+@@ -234,6 +249,7 @@
+       'skip-notarization': { type: 'boolean', default: false },
+       check: { type: 'boolean', default: false },
+       'build-version': { type: 'string' },
++      publish: { type: 'string', default: 'never' },
+     },
+   })
+   if (positionals.length > 1) throw new Error('desktop package: expected at most one target')
+@@ -246,6 +262,10 @@
+   if (values['build-version'] !== undefined && (requestedBuildVersion === undefined || requestedBuildVersion === '')) {
+     throw new Error('desktop package: --build-version requires a value')
+   }
++  const allowedPublish = new Set(['always', 'never', 'onTag', 'onTagOrDraft'])
++  if (!allowedPublish.has(values.publish)) {
++    throw new Error(`desktop package: --publish must be one of ${[...allowedPublish].join(', ')}`)
++  }
+   return {
+     target: resolveDesktopPackageTarget(name, hostPlatform, hostArch),
+     directory: values.dir,
+@@ -254,6 +274,7 @@
+     skipNotarization: values['skip-notarization'],
+     check: values.check,
+     requestedBuildVersion,
++    publish: values.publish,
+   }
+ }
+ 
+@@ -262,12 +283,14 @@
+  * @param target - Supported release target.
+  * @param directory - Whether to stop at an unpacked application directory.
+  * @param artifact - Optional single artifact built from an existing signed application.
+- * @returns Arguments that keep publishing under the separate validated upload command.
++ * @param publish - electron-builder publish mode; defaults to `never` to keep the separate upload command authoritative.
++ * @returns Arguments that keep publishing under the separate validated upload command by default.
+  */
+ export function desktopElectronBuilderArguments(
+   target: DesktopPackageTarget,
+   directory: boolean,
+   artifact?: DesktopPrepackagedArtifact,
++  publish: string = 'never',
+ ): readonly string[] {
+   return [
+     'exec',
+@@ -278,7 +301,7 @@
+     ...(artifact === undefined ? [] : [artifact.format]),
+     target.builderArch,
+     '--publish',
+-    'never',
++    publish,
+     ...(directory ? ['--dir'] : []),
+     ...(artifact === undefined ? [] : [
+       ...(target.platform === 'darwin' ? ['--config.mac.notarize=false'] : []),
+@@ -387,7 +410,10 @@
+         ? packageTarget(invocation, environment, run)
+         : withMacOSSigningKeychain(environment, signingEnvironment => packageTarget(invocation, signingEnvironment, run)), secrets)
+     } else {
+-      await packagingStep(run.directory, 'windows-package', () => packageTarget(invocation, environment, run), secrets)
++      // Linux has no signing or notarization; it shares the Windows `packageTarget` call, which
++      // skips signing stages because `signPrimaryRuntime` is false for any non-Windows platform.
++      const stageName = target.platform === 'linux' ? 'linux-package' : 'windows-package'
++      await packagingStep(run.directory, stageName, () => packageTarget(invocation, environment, run), secrets)
+     }
+     success = true
+   } catch (error) {
+@@ -424,7 +450,10 @@
+   const journal = target.platform === 'darwin' ? process.env.DSH_DESKTOP_PACKAGING_RUN_DIR : undefined
+   const proxyEvent = (status: string) => { if (journal) recordPackagingEvent(journal, { type: 'notarization-proxy', status }) }
+   const mac = target.platform === 'darwin' ? resolveMacOSPackageSettings(environment) : undefined
+-  const packConcurrency = mac?.packConcurrency ?? resolveWindowsPackageSettings(environment).packConcurrency
++  // Linux has no signing configuration; Windows reads its pack concurrency from the Windows
++  // settings, but Linux falls back to 1 (serial pack) because it has no equivalent settings file.
++  const packConcurrency = mac?.packConcurrency
++    ?? (target.platform === 'linux' ? 1 : resolveWindowsPackageSettings(environment).packConcurrency)
+   const packArguments = ['--concurrency', String(packConcurrency)]
+   const buildPaths = desktopTargetBuildPaths(target.name, environment)
+   const releaseRecordPath = join(buildPaths.artifacts, desktopBuildRecordFilename(target.name))
+@@ -526,12 +555,12 @@
+   if (signPrimaryRuntime) await execute(['run', 'sign:primary-runtime', '--dsh'], electronBuilderEnv)
+   if (invocation.prepareOnly) return
+   const buildMacArtifact = (artifact: DesktopPrepackagedArtifact) => execute(
+-    desktopElectronBuilderArguments(target, false, artifact), artifact.format === 'zip'
++    desktopElectronBuilderArguments(target, false, artifact, invocation.publish), artifact.format === 'zip'
+       ? { ...electronBuilderEnv, ELECTRON_BUILDER_COMPRESSION_LEVEL: String(mac?.zipCompressionLevel) }
+       : electronBuilderEnv)
+   if (target.platform === 'darwin' && !invocation.unsigned && !invocation.skipNotarization && !invocation.directory) {
+     await execute([
+-      ...desktopElectronBuilderArguments(target, true),
++      ...desktopElectronBuilderArguments(target, true, undefined, invocation.publish),
+       '--config.mac.notarize=false',
+     ], electronBuilderEnv)
+     await execute(['exec', 'tsx', 'scripts/smoke-packaged-runtime.ts'], targetEnv)
+@@ -543,20 +572,20 @@
+       environment: electronBuilderEnv,
+     }, buildMacArtifact), undefined, undefined, proxyEvent)
+   } else if (target.platform === 'darwin' && !invocation.unsigned && !invocation.skipNotarization) {
+-    await execute([...desktopElectronBuilderArguments(target, true), '--config.mac.notarize=false'], electronBuilderEnv)
++    await execute([...desktopElectronBuilderArguments(target, true, undefined, invocation.publish), '--config.mac.notarize=false'], electronBuilderEnv)
+     await execute(['exec', 'tsx', 'scripts/smoke-packaged-runtime.ts'], targetEnv)
+     const appPath = join(buildPaths.artifacts, target.arch === 'arm64' ? 'mac-arm64' : 'mac', 'DeepSeek Harness.app')
+     await withMacOSNotarizationProxy(mac?.notarizationProxy,
+       () => notarizeMacOS({ appPath, ...resolveMacOSNotarizationEnvironment(environment) }), undefined, undefined, proxyEvent)
+   } else {
+     if (target.platform === 'darwin' && invocation.skipNotarization && !invocation.directory) {
+-      await execute(desktopElectronBuilderArguments(target, true), electronBuilderEnv)
++      await execute(desktopElectronBuilderArguments(target, true, undefined, invocation.publish), electronBuilderEnv)
+       const appPath = join(artifactsRoot, target.arch === 'arm64' ? 'mac-arm64' : 'mac', 'DeepSeek Harness.app')
+       for (const format of ['dmg', 'zip'] as const) {
+         await buildMacArtifact({ format, appPath, output: artifactsRoot })
+       }
+     } else {
+-      await signedStage('artifacts', () => execute(desktopElectronBuilderArguments(target, invocation.directory), electronBuilderEnv))
++      await signedStage('artifacts', () => execute(desktopElectronBuilderArguments(target, invocation.directory, undefined, invocation.publish), electronBuilderEnv))
+     }
+     await execute(['exec', 'tsx', 'scripts/smoke-packaged-runtime.ts',
+       ...(invocation.unsigned ? ['--unsigned'] : []), ...(invocation.skipNotarization ? ['--skip-notarization'] : [])], targetEnv)

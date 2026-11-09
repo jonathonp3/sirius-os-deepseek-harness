@@ -1,0 +1,98 @@
+--- a/apps/desktop/scripts/desktop-package-environment.mjs
++++ b/apps/desktop/scripts/desktop-package-environment.mjs
+@@ -18,7 +18,13 @@
+ const SHARED_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_RELEASE_ID|DOWNLOAD_PROD_EO_ZONE_ID|DOWNLOAD_(?:TEST|PROD)_(?:ORIGIN|COS_BUCKET|COS_SECRET_ID|COS_SECRET_KEY))$/u
+ const WINDOWS_SETTING = /^DSH_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN|SIGNATURE_CACHE_DIR|SIGNATURE_CACHE_CONCURRENCY|PACK_CONCURRENCY|COMPRESSION_LEVEL)$/u
+ const MACOS_SETTING = /^(?:DSH_DESKTOP_MACOS_(?:SIGNING_IDENTITY|TEAM_ID|SIGNATURE_CACHE_DIR|PACK_CONCURRENCY|ZIP_COMPRESSION_LEVEL|DOWNLOAD_PROXY|NOTARIZATION_PROXY)|APPLE_(?:API_KEY|API_KEY_ID|API_ISSUER|ID|APP_SPECIFIC_PASSWORD|TEAM_ID|KEYCHAIN|KEYCHAIN_PROFILE)|CSC_(?:LINK|KEY_PASSWORD))$/u
+-const AMBIENT_RELEASE_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|MANDATORY_UPDATE_.*|WINDOWS_.*|MACOS_.*)|APPLE_.*|(?:WIN_)?CSC_.*|DOWNLOAD_(?:TEST|PROD)_.*)$/iu
++// Linux has no signing, notarization, or update-feed credentials. Match nothing so a
++// stray DSH_DESKTOP_* setting in a file is rejected rather than silently ignored.
++const LINUX_SETTING = /$^/u
++// DSH_DESKTOP_APP_ID is intentionally NOT filtered here: it is a public identifier
++// (com.deepseek.harness), not a credential, and on Linux there is no .env file to
++// carry it. Filtering it here would strip the value the package.json scripts set.
++const AMBIENT_RELEASE_SETTING = /^(?:DSH_DESKTOP_(?:AUTO_UPDATE_ENV|MANDATORY_UPDATE_.*|WINDOWS_.*|MACOS_.*)|APPLE_.*|(?:WIN_)?CSC_.*|DOWNLOAD_(?:TEST|PROD)_.*)$/iu
+ const FILE_SETTINGS = ['DSH_DESKTOP_WINDOWS_CER_FILE', 'DSH_DESKTOP_WINDOWS_SIGNTOOL', 'APPLE_API_KEY', 'APPLE_KEYCHAIN', 'CSC_LINK']
+ 
+ /**
+@@ -36,11 +42,11 @@
+ 
+ /**
+  * Read a machine preset when selected, otherwise the target's required dotenv; no ambient release fallback.
++ * PACKAGE_TEST_RELEASE_ID overrides the test preset only; blank retains its configured ID.
+  * PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL overrides the Mac file setting with 3 or 7; an empty value is invalid.
+  * Any defined Mac ZIP override rejects Windows, including an empty value; nonempty Windows overrides reject macOS.
+- * PACKAGE_TEST_RELEASE_ID overrides the test preset only; blank retains its configured ID.
+  * PACKAGE_WINDOWS_COMPRESSION_LEVEL selects 3 or 7 for Windows workflow builds; blank retains the file setting.
+- * @param {'win32' | 'darwin'} platform Target platform.
++ * @param {'win32' | 'darwin' | 'linux'} platform Target platform.
+  * @param {NodeJS.ProcessEnv} environment Parent environment, retained only for unrelated build tools.
+  * @param {string} appRoot Desktop application directory; relative credential paths resolve here.
+  * @param {{ unsigned?: boolean, prepareOnly?: boolean }} options Unsigned presets and Windows preparation-only presets never read signing credentials.
+@@ -59,23 +65,32 @@
+     if (!['3', '7'].includes(zipCompression)) throw new Error('desktop package: workflow ZIP compression must be 3 or 7')
+   }
+   const preset = environment.DSH_PACKAGING_PRESET
+-  let path = join(appRoot, platform === 'win32' ? '.env.windows' : '.env.macos')
++  // Linux ships no signing or notarization credentials, so there is no per-platform
++  // dotenv file to read. Only a selected preset can contribute settings.
++  let path = platform === 'linux'
++    ? ''
++    : join(appRoot, platform === 'win32' ? '.env.windows' : '.env.macos')
+   if (preset !== undefined) {
+     if (preset !== 'test' && preset !== 'production') throw new Error('desktop package: preset must be test or production')
+     const root = environment.DSH_PACKAGING_CONFIG_DIR
+     if (!root || !isAbsolute(root)) throw new Error('desktop package: DSH_PACKAGING_CONFIG_DIR must be an absolute directory')
+     path = join(root, 'presets', `${preset}.env`)
+   }
+-  const platformSetting = platform === 'win32' ? WINDOWS_SETTING : MACOS_SETTING
++  const platformSetting = platform === 'win32'
++    ? WINDOWS_SETTING
++    : platform === 'linux' ? LINUX_SETTING : MACOS_SETTING
+   const publicPlatformSetting = platform === 'win32'
+     ? /^DSH_DESKTOP_WINDOWS_(?:SIGNATURE_CACHE_(?:DIR|CONCURRENCY)|PACK_CONCURRENCY|COMPRESSION_LEVEL)$/u
+     : /^DSH_DESKTOP_MACOS_(?:SIGNATURE_CACHE_DIR|PACK_CONCURRENCY|ZIP_COMPRESSION_LEVEL|DOWNLOAD_PROXY|NOTARIZATION_PROXY)$/u
+-  const settings = readSettings(path, name => preset === undefined
+-    ? SHARED_SETTING.test(name) || platformSetting.test(name)
+-    : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_(?:ORIGIN|RELEASE_ID))$/u.test(name) || publicPlatformSetting.test(name))
+-  if (preset !== undefined) {
++  const settings = path === ''
++    ? {}
++    : readSettings(path, name => preset === undefined
++      ? SHARED_SETTING.test(name) || platformSetting.test(name)
++      : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_(?:ORIGIN|RELEASE_ID))$/u.test(name) || publicPlatformSetting.test(name))
++  if (preset !== undefined && path !== '') {
+     if (settings.DSH_DESKTOP_AUTO_UPDATE_ENV !== preset) throw new Error('desktop package: preset deployment must match its name')
+-    if (!options.unsigned && (platform === 'darwin' || !options.prepareOnly)) {
++    // Linux never reads a signing-secrets file; the preset file is the only input.
++    if (platform !== 'linux' && !options.unsigned && (platform === 'darwin' || !options.prepareOnly)) {
+       const filename = platform === 'win32' ? 'windows-signing.env' : 'macos-signing.env'
+       Object.assign(settings, readSettings(join(dirname(dirname(path)), 'secrets', filename),
+         name => platform === 'win32'
+@@ -148,7 +163,7 @@
+ /**
+  * Validate the packaging mode before preparation without invoking a token or Apple's services.
+  * @param {NodeJS.ProcessEnv} environment Selected local defaults or file-owned release settings.
+- * @param {{ platform: 'win32' | 'darwin', arch: string }} target Selected release target.
++ * @param {{ platform: 'win32' | 'darwin' | 'linux', arch: string }} target Selected release target.
+  * @param {{ unsigned?: boolean, prepareOnly?: boolean, skipNotarization?: boolean }} options Explicit packaging mode.
+  * @returns {void}
+  */
+@@ -156,7 +171,16 @@
+   resolveDesktopTargetBuildPaths(environment, target.platform, target.arch)
+   resolveDesktopAppId(environment)
+   resolveNpmRegistry(environment)
+-  if (target.platform !== 'darwin' || !options.unsigned) resolveDesktopPolicyEnvironment(environment)
++  // Linux has no mandatory-update policy configured yet; skip the origin requirement so a
++  // local AppImage build is not blocked by an empty DSH_DESKTOP_MANDATORY_UPDATE_*_ORIGIN.
++  if (target.platform !== 'linux' && (target.platform !== 'darwin' || !options.unsigned)) {
++    resolveDesktopPolicyEnvironment(environment)
++  }
++  if (target.platform === 'linux') {
++    // No signing, notarization, or update-feed credentials to resolve. If a prepare-only
++    // run is requested, that is the entire Linux validation.
++    return
++  }
+   if (target.platform === 'darwin') resolveMacOSPackageSettings(environment)
+   else resolveWindowsPackageSettings(environment)
+   if (options.unsigned) return

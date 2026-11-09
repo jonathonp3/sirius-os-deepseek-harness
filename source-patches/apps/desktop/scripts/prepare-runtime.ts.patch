@@ -1,0 +1,26 @@
+--- a/apps/desktop/scripts/prepare-runtime.ts
++++ b/apps/desktop/scripts/prepare-runtime.ts
+@@ -23,11 +23,21 @@
+ async function prepareElectron({ platform, arch }: DesktopTarget): Promise<string> {
+   const require = createRequire(import.meta.url)
+   const { version } = require('electron/package.json') as { version: string }
++  // `@electron/get`'s installed type declaration narrows `platform` to `'darwin' | 'win32'`,
++  // but its runtime accepts `'linux'` (and any other NodeJS.Platform). The cast preserves
++  // the runtime value that `desktopTargetPlatform` produced, which is always one of those.
+   const archive = await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'download:electron',
+-    () => downloadArtifact({ version, platform, arch, artifactName: 'electron', cacheRoot: BUILD_PATHS.downloads }))
++    () => downloadArtifact({ version, platform: platform as NodeJS.Platform, arch, artifactName: 'electron', cacheRoot: BUILD_PATHS.downloads }))
+   rmSync(BUILD_PATHS.electron, { recursive: true, force: true })
+   await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'extract:electron', () => extractZip(archive, { dir: BUILD_PATHS.electron }))
+-  const executable = join(BUILD_PATHS.electron, platform === 'win32' ? 'electron.exe' : 'Electron.app/Contents/MacOS/Electron')
++  // Each platform ships Electron at a different path inside the extracted distribution:
++  //   win32  -- electron.exe at the root
++  //   darwin -- the Electron.app bundle, whose executable is nested under Contents/MacOS/
++  //   linux  -- a plain `electron` binary at the root
++  const executable = join(BUILD_PATHS.electron,
++    platform === 'win32' ? 'electron.exe'
++      : platform === 'darwin' ? 'Electron.app/Contents/MacOS/Electron'
++        : 'electron')
+   return execFileSync(executable, ['-p', 'process.versions.node'], {
+     encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+   }).trim()

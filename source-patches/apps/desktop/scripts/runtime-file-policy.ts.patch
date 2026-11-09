@@ -1,0 +1,18 @@
+--- a/apps/desktop/scripts/runtime-file-policy.ts
++++ b/apps/desktop/scripts/runtime-file-policy.ts
+@@ -27,6 +27,15 @@
+   if (name.startsWith('@deepseek-ai/libreoffice-kit-')) {
+     if (name !== `@deepseek-ai/libreoffice-kit-${officeEngine}`) return 'LibreOffice other platform'
+   }
++  // sharp's native Linux backends carry their own static GLib, which collides with the
++  // system GLib Electron links: the native addon's g_object_unref binds to Electron's
++  // copy for objects its own copy created, and image work crashes the Host with SIGSEGV.
++  // The Host installs a resolver that forces sharp onto @img/sharp-wasm32 on Linux, so
++  // the native backends are omitted from the packaged runtime. Off Linux they stay,
++  // because they are the only backends that platform can load.
++  if (target.platform === 'linux') {
++    if (/^@img\/sharp-(?:libvips-)?linux(?:musl)?-/u.test(name)) return 'sharp native Linux backend (GLib collides with Electron)'
++  }
+   if (name === 'fs-ext' && /^build\/(?:Release|Debug)\/(?:obj(?:\/|$)|fs_ext\.(?:exp|lib|pdb|iobj|ipdb)$)/u.test(entry)) {
+     return 'fs-ext compiler output'
+   }

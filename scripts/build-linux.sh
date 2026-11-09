@@ -32,6 +32,10 @@ if [[ ! -d deepseek-harness ]]; then
 fi
 cd deepseek-harness
 
+echo "==> reset working tree before checkout"
+git checkout -- . 2>/dev/null || true
+git clean -fd -- apps/ 2>/dev/null || true
+
 echo "==> checkout $PIN"
 git fetch origin
 git checkout "$PIN"

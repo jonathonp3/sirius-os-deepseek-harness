@@ -1,0 +1,80 @@
+--- a/apps/desktop/scripts/prepare-dsh.ts
++++ b/apps/desktop/scripts/prepare-dsh.ts
+@@ -44,9 +44,51 @@
+ const RUNTIME_ROOT = BUILD_PATHS.runtime
+ const PNPM_BUILD_STATE = BUILD_PATHS.dshPnpm
+ const PACKAGE_SET_ROOT = BUILD_PATHS.packageSet
+-const NODE = join(BUILD_PATHS.electron, process.platform === 'win32' ? 'electron.exe' : 'Electron.app/Contents/MacOS/Electron')
++// Each platform ships Electron at a different path inside the extracted distribution:
++//   win32  -- electron.exe at the root
++//   darwin -- the Electron.app bundle, whose executable is nested under Contents/MacOS/
++//   linux  -- a plain `electron` binary at the root
++const NODE = join(BUILD_PATHS.electron,
++  process.platform === 'win32' ? 'electron.exe'
++    : process.platform === 'darwin' ? 'Electron.app/Contents/MacOS/Electron'
++      : 'electron')
+ const PNPM = join(RUNTIME_ROOT, 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs')
+ 
++/** Emit a filter decision for every sharp path, so a broken exclusion is visible in the build log. */
++const SHARP_DEBUG = process.env.DSH_DEBUG_SHARP_FILTER === '1'
++
++/**
++ * Patch the LibreOfficeKit resolver so Linux skips its native probe.
++ *
++ * The kit computes a native engine name from platform, arch, and libc, and asks
++ * `require.resolve` for it. On Linux that name (`libreoffice-kit-linux-x64-glibc`) is never
++ * published, but the `relocatedFilename` hook in `dsh-app-boot` resolves the request to the
++ * WASM package's path instead. `resolveEngine` then reads the WASM package's manifest and
++ * reports it as an "incomplete" native engine, before its WASM fallback can run.
++ *
++ * Forcing `platformTarget` to return `undefined` on Linux skips the native probe entirely,
++ * so `resolveEngine` goes straight to `@deepseek-ai/libreoffice-kit-wasm`. Linux has no
++ * published native engine, so this is the intended selection, not a workaround.
++ * @param modules - Installed production `node_modules` directory.
++ * @returns Resolves after the patch is applied, or logs that the kit layout changed.
++ */
++async function patchLibreOfficeKitForLinux(modules: string): Promise<void> {
++  const kitLib = join(modules, '@deepseek-ai/libreoffice-kit/lib/index.js')
++  if (!existsSync(kitLib)) {
++    console.log('desktop runtime: libreoffice-kit not installed; Linux native probe patch skipped')
++    return
++  }
++  const source = readFileSync(kitLib, 'utf8')
++  const before = 'return report().header?.glibcVersionRuntime ? `linux-${arch}-glibc` : void 0;'
++  const after = 'return void 0; /* Linux has no published native engine; always use WASM. */'
++  if (!source.includes(before)) {
++    console.log('desktop runtime: libreoffice-kit platformTarget shape changed; Linux native probe patch skipped')
++    return
++  }
++  writeFileSync(kitLib, source.replace(before, after))
++  console.log('desktop runtime: patched libreoffice-kit platformTarget to skip Linux native engine')
++}
++
+ function manifestVersion(path: string, subject: string): string {
+   const manifest = JSON.parse(readFileSync(path, 'utf8')) as { version?: unknown }
+   if (typeof manifest.version !== 'string') throw new Error(`desktop runtime: ${subject} has no version`)
+@@ -142,13 +184,23 @@
+     const targetName = resolveDesktopBuildTarget()
+     const target = desktopTargetPlatform(targetName)
+     const modules = join(BUILD_ROOT, 'node_modules')
++    if (target.platform === 'linux') {
++      await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:patch-kit-linux', () => patchLibreOfficeKitForLinux(modules))
++    }
+     const officeManifest = JSON.parse(readFileSync(join(modules, '@deepseek-ai/libreoffice-kit/package.json'), 'utf8'))
+     const officeEngine = selectOfficeEngine(officeManifest, target)
+     mkdirSync(DSH_OUTPUT_ROOT, { recursive: true })
+     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:materialize-modules', async () => {
+       cpSync(modules, join(DSH_OUTPUT_ROOT, 'node_modules'), {
+         recursive: true, dereference: true,
+-        filter: source => desktopRuntimeFileExclusion(relative(modules, source), target, officeEngine) === undefined,
++        filter: source => {
++          const rel = relative(modules, source)
++          const reason = desktopRuntimeFileExclusion(rel, target, officeEngine)
++          if (SHARP_DEBUG && rel.includes('sharp')) {
++            console.log(`[sharp-filter] ${rel} → ${reason ?? 'kept'}`)
++          }
++          return reason === undefined
++        },
+       })
+     })
+     writeFileSync(join(DSH_OUTPUT_ROOT, 'package.json'), `${JSON.stringify({

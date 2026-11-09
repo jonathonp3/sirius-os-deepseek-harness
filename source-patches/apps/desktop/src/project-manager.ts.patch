@@ -1,0 +1,31 @@
+--- a/apps/desktop/src/project-manager.ts
++++ b/apps/desktop/src/project-manager.ts
+@@ -133,17 +133,26 @@
+ export function createRuntimeProjectMetadata(projectDir: string, release: DesktopRelease): void {
+   mkdirSync(projectDir, { recursive: true, mode: 0o700 })
+   const packageSet = verifyDesktopCorePackageSet(projectDir, release.version)
++  // Linux runs sharp's WebAssembly build: the native Linux backend links its own static
++  // GLib, which collides with the system GLib Electron links, and image work crashes the
++  // Host with SIGSEGV. pnpm skips @img/sharp-wasm32 for an x64 host because its
++  // `cpu: ["wasm32"]` condition never matches, so it must be a direct dependency (and a
++  // workspace override, so pnpm resolves and installs it) to be present at runtime.
++  const dependencies = {
++    ...desktopCorePackageOverrides(packageSet),
++    '@img/sharp-wasm32': '0.35.5',
++  }
+   const manifest = {
+     name: PROJECT_NAME,
+     private: true,
+     version: '0.0.0',
+-    dependencies: desktopCorePackageOverrides(packageSet),
++    dependencies,
+     dsh: { profile: { bundles: [...WEB_PROFILE.bundles] } },
+   }
+   writeJson(join(projectDir, 'package.json'), manifest)
+   writeFileSync(
+     join(projectDir, 'pnpm-workspace.yaml'),
+-    workspaceFile(desktopCorePackageOverrides(packageSet)),
++    workspaceFile(dependencies),
+     { mode: 0o600 },
+   )
+ }
