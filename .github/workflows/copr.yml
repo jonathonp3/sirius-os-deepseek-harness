@@ -17,6 +17,7 @@ jobs:
       - name: Install container basics
         run: |
           dnf install -y git rpm-build rpmdevtools copr-cli patchelf
+
       - name: Install toolchain
         run: ./scripts/toolchain.sh
 
@@ -53,4 +54,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # copr.yml and release.yml run in parallel; create the release as a
+          # draft if release.yml has not created it yet. release.yml publishes
+          # the draft when its AppImage build completes.
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 \
+            || gh release create "${GITHUB_REF_NAME}" \
+                 --title "${GITHUB_REF_NAME}" \
+                 --notes "" \
+                 --draft
           gh release upload "${GITHUB_REF_NAME}" dist/*.src.rpm --clobber
