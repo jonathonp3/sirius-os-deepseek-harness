@@ -2,7 +2,7 @@
 # build-srpm.sh — build a source RPM for COPR submission.
 #
 # Requires: `make build` has produced linux-unpacked/ under .build/.
-# Output:   dist/sirius-os-deepseek-harness-<version>-1.<dist>.src.rpm
+# Output:   dist/sirius-os-deepseek-harness-<version>-<release>.<dist>.src.rpm
 #
 # The spec's Source0 is a bare filename, so rpmbuild -bs finds it in
 # ~/rpmbuild/SOURCES/ and embeds it in the SRPM. COPR extracts it there.
@@ -17,7 +17,7 @@ WORK_DIR="${WORK_DIR:-$REPO_ROOT/.build}"
 OUT="${OUT:-$REPO_ROOT/dist}"
 
 DESKTOP_JSON="$WORK_DIR/deepseek-harness/apps/desktop/package.json"
-VERSION="$(grep -oP '"version":\s*"\K[^"]+' "$DESKTOP_JSON")"
+VERSION="$(grep -oP '"version":\s*"\K[^"]+' "$DESKTOP_JSON" | head -1)"
 echo "==> version: $VERSION"
 
 ARTIFACT_DIR="$WORK_DIR/deepseek-harness/apps/desktop/.desktop-build/targets/linux-x64/unsigned-artifacts"
@@ -38,7 +38,6 @@ cp "$REPO_ROOT/packaging/org.jonathonp3.deepseek-harness.desktop" \
    "$REPO_ROOT/packaging/deepseek-harness.png" \
    "$REPO_ROOT/packaging/org.jonathonp3.deepseek-harness.appdata.xml" \
    "$REPO_ROOT/packaging/dsh" \
-   "$REPO_ROOT/packaging/dsh" \
    "$HOME/rpmbuild/SOURCES/"
 
 echo "==> template spec"
@@ -51,10 +50,24 @@ if grep -q '@DSH_VERSION@' "$SPEC_DST"; then
 fi
 
 echo "==> rpmbuild -bs"
+MARKER="$HOME/rpmbuild/SRPMS/.last-build-$$"
+touch "$MARKER"
 cd "$HOME/rpmbuild/SPECS"
 rpmbuild -bs "$SPEC_DST"
 
 echo "==> copy SRPM to $OUT"
 mkdir -p "$OUT"
-cp ~/rpmbuild/SRPMS/sirius-os-deepseek-harness-*.src.rpm "$OUT/"
+# Copy exactly the SRPM(s) this run produced, not stale ones from earlier releases.
+found=0
+while IFS= read -r srpm; do
+  cp -v "$srpm" "$OUT/"
+  found=$((found + 1))
+done < <(find "$HOME/rpmbuild/SRPMS" -maxdepth 1 -name 'sirius-os-deepseek-harness-*.src.rpm' -newer "$MARKER")
+rm -f "$MARKER"
+
+if [ "$found" -eq 0 ]; then
+  echo "error: rpmbuild -bs did not produce a new .src.rpm" >&2
+  exit 1
+fi
+
 ls -lh "$OUT"/*.src.rpm

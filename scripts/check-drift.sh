@@ -4,9 +4,14 @@
 # pin you're moving to).
 #
 # For each .patch:
-#   - if upstream file is unchanged between the two pins → patch applies as-is
-#   - if upstream file changed → three-way merge attempt; conflict markers
-#     appear in the file if the patch hunks collide with upstream's changes
+#   - upstream file unchanged between the two pins  -> clean
+#   - upstream file changed, patch dry-runs cleanly -> UPSTREAM CHANGED (ok)
+#   - upstream file changed, patch dry-run fails    -> CONFLICT
+#   - create-from-empty patch, dry-runs cleanly     -> clean (new file)
+#   - file existed at old pin, absent at new pin    -> UPSTREAM FILE MISSING
+#
+# This script only dry-runs patches. It does not write conflict markers;
+# use reconcile-patches.sh (or build-linux.sh) to apply them with --merge.
 #
 # Exit code: 0 if all patches are clean or apply cleanly, 1 if any conflict.
 set -euo pipefail
@@ -47,39 +52,54 @@ echo ""
 clean=0
 changed=0
 conflict=0
+missing=0
 
 while IFS= read -r patch; do
-  rel="${patch#source-patches/}"
+  rel="${patch#"$REPO_ROOT/"}"
+  rel="${rel#source-patches/}"
   rel="${rel%.patch}"
 
   old="$OLD_DIR/$rel"
   new="$NEW_DIR/$rel"
 
-  if [ ! -f "$new" ]; then
-    echo "  NEW UPSTREAM FILE MISSING: $rel"
-    echo "    (file existed at $OLD_PIN, absent at $NEW_PIN — patch may be obsolete)"
-    changed=$((changed + 1))
-    continue
+  old_exists=0; [ -f "$old" ] && old_exists=1
+  new_exists=0; [ -f "$new" ] && new_exists=1
+
+  # Patch applies cleanly to the new tree?
+  if ( cd "$NEW_DIR" && patch -p1 --forward --dry-run --silent < "$patch" >/dev/null 2>&1 ); then
+    applies=1
+  else
+    applies=0
   fi
 
-  if [ -f "$old" ] && cmp -s "$old" "$new"; then
+  if [ "$new_exists" = 0 ] && [ "$old_exists" = 1 ]; then
+    echo "  UPSTREAM FILE MISSING: $rel"
+    echo "    (existed at $OLD_PIN, absent at $NEW_PIN — patch may be obsolete)"
+    missing=$((missing + 1))
+  elif [ "$new_exists" = 0 ] && [ "$old_exists" = 0 ]; then
+    # Create-from-empty patch; upstream never had this file.
+    if [ "$applies" = 1 ]; then
+      echo "  clean: $rel (create-new, applies)"
+      clean=$((clean + 1))
+    else
+      echo "  CONFLICT: $rel (create-new, dry-run failed)"
+      conflict=$((conflict + 1))
+    fi
+  elif [ "$old_exists" = 1 ] && cmp -s "$old" "$new"; then
     echo "  clean: $rel (upstream unchanged)"
     clean=$((clean + 1))
-    continue
-  fi
-
-  echo "  UPSTREAM CHANGED: $rel"
-  changed=$((changed + 1))
-
-  # Attempt a dry-run apply so we can classify before touching files
-  if ( cd "$NEW_DIR" && patch -p1 --forward --dry-run --silent < "$REPO_ROOT/$patch" ); then
-    echo "    patch applies cleanly (no conflict markers)"
   else
-    echo "    CONFLICT — resolve in $NEW_DIR/$rel"
-    conflict=$((conflict + 1))
+    echo "  UPSTREAM CHANGED: $rel"
+    changed=$((changed + 1))
+    if [ "$applies" = 1 ]; then
+      echo "    patch applies cleanly (no conflict markers needed)"
+    else
+      echo "    CONFLICT — resolve in $NEW_DIR/$rel"
+      conflict=$((conflict + 1))
+    fi
   fi
 done < <(find "$REPO_ROOT/source-patches" -name '*.patch' | sort)
 
 echo ""
-echo "==> summary: $clean clean, $changed upstream-changed, $conflict conflicted"
-[[ $conflict -eq 0 ]] || exit 1
+echo "==> summary: $clean clean, $changed upstream-changed, $conflict conflicted, $missing missing"
+[[ $conflict -eq 0 && $missing -eq 0 ]] || exit 1
