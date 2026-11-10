@@ -16,7 +16,7 @@ jobs:
 
       - name: Install container basics
         run: |
-          dnf install -y git rpm-build rpmdevtools copr-cli patchelf
+          dnf install -y git rpm-build rpmdevtools copr-cli patchelf gh
 
       - name: Install toolchain
         run: ./scripts/toolchain.sh
