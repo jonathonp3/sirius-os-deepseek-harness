@@ -94,8 +94,7 @@ if ! command -v pnpm >/dev/null 2>&1; then
   elif command -v npm >/dev/null 2>&1; then
     $SUDO npm install -g pnpm@11.28.5
   else
-    echo "error: neither corepack nor npm available; install Node.js first" >&2
-    exit 1
+    echo "==> pnpm not installed and neither corepack nor npm available; skipping (CI installs pnpm separately)" >&2
   fi
 else
   echo "==> pnpm already installed: $(pnpm --version)"
