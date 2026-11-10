@@ -39,8 +39,12 @@ echo "==> Detected package manager: $PM"
 # Install
 # ---------------------------------------------------------------------------
 if [ "$PM" = "dnf" ]; then
-  $SUDO dnf install -y \
+  # --skip-broken tolerates the Fedora 45 alternatives conflict between the
+  # unversioned nodejs package and an already-installed nodejs22. On a clean
+  # container (no nodejs22), nodejs installs normally.
+  $SUDO dnf install -y --skip-broken \
     git \
+    nodejs nodejs-devel nodejs-packaging \
     gcc gcc-c++ make \
     python3 \
     nss nspr \
@@ -76,28 +80,6 @@ else
     curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO -E bash -
     $SUDO apt-get install -y nodejs
   fi
-fi
-
-# ---------------------------------------------------------------------------
-# pnpm — required by build-linux.sh (pnpm install --frozen-lockfile)
-#
-# The CI workflows install pnpm separately (pnpm/action-setup on the
-# release runner, `npm install -g pnpm` in the Fedora container). This
-# installs it for local `make toolchain`, which otherwise leaves a fresh
-# host unable to run `make build`.
-# ---------------------------------------------------------------------------
-if ! command -v pnpm >/dev/null 2>&1; then
-  echo "==> Installing pnpm 11.28.5"
-  if command -v corepack >/dev/null 2>&1; then
-    $SUDO corepack enable
-    $SUDO corepack prepare pnpm@11.28.5 --activate
-  elif command -v npm >/dev/null 2>&1; then
-    $SUDO npm install -g pnpm@11.28.5
-  else
-    echo "==> pnpm not installed and neither corepack nor npm available; skipping (CI installs pnpm separately)" >&2
-  fi
-else
-  echo "==> pnpm already installed: $(pnpm --version)"
 fi
 
 echo "==> Environment set up ($PM)"
