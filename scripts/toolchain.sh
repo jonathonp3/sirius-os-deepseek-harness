@@ -41,7 +41,6 @@ echo "==> Detected package manager: $PM"
 if [ "$PM" = "dnf" ]; then
   $SUDO dnf install -y \
     git \
-    nodejs nodejs-devel nodejs-packaging \
     gcc gcc-c++ make \
     python3 \
     nss nspr \
