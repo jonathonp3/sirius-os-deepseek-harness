@@ -1,7 +1,5 @@
 %global debug_package %{nil}
 %undefine __brp_mangle_shebangs
-%global __requires_exclude_from ^/usr/libexec/deepseek-harness/
-%global __provides_exclude_from ^/usr/libexec/deepseek-harness/
 
 # Replaced at SRPM build time by scripts/build-srpm.sh
 %global _dsh_version @DSH_VERSION@
@@ -9,12 +7,41 @@
 
 Name:           sirius-os-deepseek-harness
 Version:        %{_dsh_rpm_version}
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        Agent harness workspace
 License:        MIT
 URL:            https://github.com/jonathonp3/sirius-os-deepseek-harness
 BuildArch:      x86_64
+# The payload is self-contained: bundled libraries (libc.musl,
+# libonnxruntime, libjpeg, libpng, libtiff, liblzma, libgfortran,
+# libquadmath) ship inside /usr/libexec/deepseek-harness/ and are
+# not available as Fedora packages. Disable auto-requires/provides
+# so elfdeps does not record them as package Requires, and declare
+# the real system deps explicitly.
+AutoReqProv:    no
 Requires:       glibc >= 2.39
+Requires:       gtk3
+Requires:       nss
+Requires:       nspr
+Requires:       libX11
+Requires:       libXcomposite
+Requires:       libXdamage
+Requires:       libXext
+Requires:       libXfixes
+Requires:       libXrandr
+Requires:       libxcb
+Requires:       libxkbcommon
+Requires:       pango
+Requires:       cairo
+Requires:       alsa-lib
+Requires:       libdrm
+Requires:       mesa-libgbm
+Requires:       atk
+Requires:       at-spi2-atk
+Requires:       cups-libs
+Requires:       expat
+Requires:       dbus-libs
+Requires:       systemd-libs
 BuildRequires:  patchelf
 
 Source0:        deepseek-harness-%{_dsh_version}-linux-x64.tar.xz
@@ -83,6 +110,13 @@ appstreamcli refresh-cache --force 2>/dev/null || :
 %{_datadir}/metainfo/org.jonathonp3.deepseek-harness.appdata.xml
 
 %changelog
+* Tue Nov 10 2026 Jonathon P <jonathon@sirius-os> - %{version}-3
+- Add AutoReqProv: no and explicit runtime Requires. Without the
+  exclusion macros, RPM's elfdeps recorded bundled payload sonames
+  (libc.musl, libonnxruntime, libjpeg, libpng, libtiff, liblzma,
+  libgfortran, libquadmath) as package Requires, making the package
+  uninstallable on Fedora. Declare the real system deps explicitly.
+
 * Tue Nov 10 2026 Jonathon P <jonathon@sirius-os> - %{version}-2
 - Add Linux CLI launcher at /usr/bin/dsh (upstream's is a macOS
   artifact: mode 0644, execs ../MacOS/DeepSeek Harness). New launcher
