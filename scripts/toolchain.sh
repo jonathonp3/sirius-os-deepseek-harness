@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# libraries.sh — install host build dependencies for the DeepSeek harness pipeline.
+# toolchain.sh — install host build dependencies for the DeepSeek harness pipeline.
 #
 # Supported:
 #   - Fedora / RHEL / CentOS Stream   (dnf)
@@ -77,6 +77,29 @@ else
     curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO -E bash -
     $SUDO apt-get install -y nodejs
   fi
+fi
+
+# ---------------------------------------------------------------------------
+# pnpm — required by build-linux.sh (pnpm install --frozen-lockfile)
+#
+# The CI workflows install pnpm separately (pnpm/action-setup on the
+# release runner, `npm install -g pnpm` in the Fedora container). This
+# installs it for local `make toolchain`, which otherwise leaves a fresh
+# host unable to run `make build`.
+# ---------------------------------------------------------------------------
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "==> Installing pnpm 11.28.5"
+  if command -v corepack >/dev/null 2>&1; then
+    $SUDO corepack enable
+    $SUDO corepack prepare pnpm@11.28.5 --activate
+  elif command -v npm >/dev/null 2>&1; then
+    $SUDO npm install -g pnpm@11.28.5
+  else
+    echo "error: neither corepack nor npm available; install Node.js first" >&2
+    exit 1
+  fi
+else
+  echo "==> pnpm already installed: $(pnpm --version)"
 fi
 
 echo "==> Environment set up ($PM)"
