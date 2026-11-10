@@ -28,21 +28,27 @@ sudo dnf copr enable jonathonp3/sirius-os
 sudo dnf install sirius-os-deepseek-harness
 ```
 
-## AppImage (any distro)
+### AppImage (any distro)
 
-Download the latest .AppImage from
-GitHub Releases,
-```bash
-chmod +x it, and run it. No installation, no root.
-```
+Download the latest `.AppImage` from
+[GitHub Releases](https://github.com/jonathonp3/sirius-os-deepseek-harness/releases),
+`chmod +x` it, and run it. No installation, no root.
+
 Launch from the application menu, or:
 
 ```bash
 deepseek-harness
 ```
 
----
+The **AppImage does not include the dsh CLI**. For terminal use, install the
+RPM (Fedora) or the npm package (any distro):
 
+```bash
+npm install -g @deepseek-ai/dsh
+dsh web
+```
+
+---
 
 ## What this project is
 

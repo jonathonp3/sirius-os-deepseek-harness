@@ -9,7 +9,7 @@
 
 Name:           sirius-os-deepseek-harness
 Version:        %{_dsh_rpm_version}
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Agent harness workspace
 License:        MIT
 URL:            https://github.com/jonathonp3/sirius-os-deepseek-harness
@@ -21,6 +21,7 @@ Source0:        deepseek-harness-%{_dsh_version}-linux-x64.tar.xz
 Source1:        org.jonathonp3.deepseek-harness.desktop
 Source2:        deepseek-harness.png
 Source3:        org.jonathonp3.deepseek-harness.appdata.xml
+Source4:        dsh
 
 %description
 DeepSeek Harness workspace, packaged for Fedora.
@@ -59,6 +60,10 @@ install -Dpm0644 %{SOURCE2} \
 install -Dpm0644 %{SOURCE3} \
     %{buildroot}%{_datadir}/metainfo/org.jonathonp3.deepseek-harness.appdata.xml
 
+# 5. CLI launcher (upstream's is macOS-only and 0644; we ship our own)
+install -Dpm0755 %{SOURCE4} %{buildroot}%{_bindir}/dsh
+
+
 %post
 update-desktop-database -q %{_datadir}/applications 2>/dev/null || :
 gtk-update-icon-cache -q %{_datadir}/icons/hicolor 2>/dev/null || :
@@ -72,11 +77,20 @@ appstreamcli refresh-cache --force 2>/dev/null || :
 %files
 %{_libexecdir}/deepseek-harness/
 %{_bindir}/deepseek-harness
+%{_bindir}/dsh
 %{_datadir}/applications/org.jonathonp3.deepseek-harness.desktop
 %{_datadir}/icons/hicolor/512x512/apps/deepseek-harness.png
 %{_datadir}/metainfo/org.jonathonp3.deepseek-harness.appdata.xml
 
 %changelog
+* Tue Nov 10 2026 Jonathon P <jonathon@sirius-os> - %{version}-2
+- Add Linux CLI launcher at /usr/bin/dsh (upstream's is a macOS
+  artifact: mode 0644, execs ../MacOS/DeepSeek Harness). New launcher
+  resolves the app root via symlink and execs the desktop host CLI
+  with ELECTRON_RUN_AS_NODE=1.
+- Note: dsh tui and dsh headless still fail — their profile templates
+  ship with the npm @deepseek-ai/dsh package, not this build.
+
 * Fri Nov 06 2026 Jonathon P <jonathon@sirius-os> - %{version}-1
 - Initial package. Self-contained payload at /usr/libexec/deepseek-harness/,
   symlink at /usr/bin/deepseek-harness, reverse-DNS desktop entry,

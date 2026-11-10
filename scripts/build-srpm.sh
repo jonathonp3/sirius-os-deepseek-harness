@@ -37,6 +37,8 @@ echo "==> source files"
 cp "$REPO_ROOT/packaging/org.jonathonp3.deepseek-harness.desktop" \
    "$REPO_ROOT/packaging/deepseek-harness.png" \
    "$REPO_ROOT/packaging/org.jonathonp3.deepseek-harness.appdata.xml" \
+   "$REPO_ROOT/packaging/dsh" \
+   "$REPO_ROOT/packaging/dsh" \
    "$HOME/rpmbuild/SOURCES/"
 
 echo "==> template spec"

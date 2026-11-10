@@ -1,0 +1,29 @@
+#!/bin/sh
+# Linux launcher for the DeepSeek Harness CLI (Electron build).
+#
+# The upstream tarball ships resources/runtime/cli/bin/dsh, which is the macOS
+# layout: it execs "$resources/../MacOS/DeepSeek Harness" and is installed 0644.
+# Neither works on Linux. This launcher resolves the install root relative to
+# itself, the same way /usr/bin/deepseek-harness -> ../libexec/deepseek-harness
+# is laid out, so it can be installed as a plain symlink target.
+set -e
+
+self=$0
+while [ -L "$self" ]; do
+	dir=$(CDPATH= cd -- "$(dirname -- "$self")" && pwd -P)
+	target=$(readlink "$self")
+	case $target in
+	/*) self=$target ;;
+	*) self=$dir/$target ;;
+	esac
+done
+
+appdir=$(CDPATH= cd -- "$(dirname -- "$self")/../libexec/deepseek-harness" && pwd -P)
+
+if [ ! -x "$appdir/deepseek-harness" ]; then
+	echo "dsh: no executable at $appdir/deepseek-harness" >&2
+	exit 1
+fi
+
+exec env ELECTRON_RUN_AS_NODE=1 "$appdir/deepseek-harness" --expose-internals \
+	"$appdir/resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js" "$@"
