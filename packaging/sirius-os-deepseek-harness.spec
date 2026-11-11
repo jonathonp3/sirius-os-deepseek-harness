@@ -7,7 +7,7 @@
 
 Name:           sirius-os-deepseek-harness
 Version:        %{_dsh_rpm_version}
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        Agent harness workspace
 License:        MIT
 URL:            https://github.com/jonathonp3/sirius-os-deepseek-harness
@@ -110,6 +110,15 @@ appstreamcli refresh-cache --force 2>/dev/null || :
 %{_datadir}/metainfo/org.jonathonp3.deepseek-harness.appdata.xml
 
 %changelog
+* Wed Nov 11 2026 Jonathon P <jonathon@sirius-os> - %{version}-4
+- Resize icon to 512x512 to match the hicolor/512x512/apps install
+  path (was 1104x1104, which violates the icon theme spec).
+- Update appdata release version to 0.2.2-rc.1.
+- Correct the -2 changelog note: dsh headless works (the bundle is in
+  the asar); only dsh tui is unavailable, because its profile template
+  ships with the npm @deepseek-ai/dsh package, not the desktop tarball.
+
+
 * Tue Nov 10 2026 Jonathon P <jonathon@sirius-os> - %{version}-3
 - Add AutoReqProv: no and explicit runtime Requires. Without the
   exclusion macros, RPM's elfdeps recorded bundled payload sonames
@@ -122,8 +131,9 @@ appstreamcli refresh-cache --force 2>/dev/null || :
   artifact: mode 0644, execs ../MacOS/DeepSeek Harness). New launcher
   resolves the app root via symlink and execs the desktop host CLI
   with ELECTRON_RUN_AS_NODE=1.
-- Note: dsh tui and dsh headless still fail — their profile templates
-  ship with the npm @deepseek-ai/dsh package, not this build.
+- Note: dsh tui is unavailable — its profile template ships in the
+  npm @deepseek-ai/dsh package, not the desktop tarball. dsh headless
+  works (the bundle is present; it reads DEEPSEEK_API_KEY from env).
 
 * Fri Nov 06 2026 Jonathon P <jonathon@sirius-os> - %{version}-1
 - Initial package. Self-contained payload at /usr/libexec/deepseek-harness/,

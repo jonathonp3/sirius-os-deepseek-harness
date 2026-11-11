@@ -39,6 +39,14 @@
     <keyword>harness</keyword>
   </keywords>
   <releases>
+    <release version="0.2.2-rc.1" date="2026-11-11">
+      <description>
+        <p>Re-pin to upstream fcc0ad4. Adds the Linux CLI launcher at
+           /usr/bin/dsh, declares runtime dependencies explicitly
+           (AutoReqProv: no), and resizes the icon to match the installed
+           hicolor size.</p>
+      </description>
+    </release>
     <release version="0.2.2-alpha.3" date="2026-11-06">
       <description>
         <p>Initial Linux desktop build.</p>
