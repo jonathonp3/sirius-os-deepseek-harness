@@ -32,7 +32,7 @@ Last updated: **2026-11-20** (after 0.2.2-rc.5 / Release 7; docs + COPR Fedora-v
 
 | Item | Value |
 |---|---|
-| `main` | `a937d876e584c0130feb41d530fe19620409db48` — “ci(copr): confirm the container Fedora version” (after the docs commit `33e2513`) |
+| `main` | Release commit `0a7c147`; later docs/CI commits: `33e2513` (docs/NEXT-BUILD.md), `a937d87` (COPR Fedora-version step); see `git log` for the head |
 | Tag `v0.2.2-rc.5` | `0a7c147` (force-moved from `a069b4d`; release is published) |
 | Tag `v0.2.2-rc.1` | `929a166` |
 | `PIN` / `PIN_BASELINE` | `2e39e70496aa02986ca6a820c5d497e816b69d7e` |
