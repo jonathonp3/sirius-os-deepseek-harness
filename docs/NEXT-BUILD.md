@@ -1,7 +1,7 @@
 # Next Build Checklist — `sirius-os-deepseek-harness`
 
 Reusable runbook for the next Fedora build/release. Written to be usable **without this conversation's context**.
-Last updated: **2026-11-19** (after 0.2.2-rc.5 / Release 7).
+Last updated: **2026-11-20** (after 0.2.2-rc.5 / Release 7; docs + COPR Fedora-version step).
 
 ---
 
@@ -32,7 +32,7 @@ Last updated: **2026-11-19** (after 0.2.2-rc.5 / Release 7).
 
 | Item | Value |
 |---|---|
-| `main` | `0a7c147a50ed9492e6bda36a7f67e141b29981a8` — “packaging: note Node 24 in appdata; bump Release to 7” |
+| `main` | `a937d876e584c0130feb41d530fe19620409db48` — “ci(copr): confirm the container Fedora version” (after the docs commit `33e2513`) |
 | Tag `v0.2.2-rc.5` | `0a7c147` (force-moved from `a069b4d`; release is published) |
 | Tag `v0.2.2-rc.1` | `929a166` |
 | `PIN` / `PIN_BASELINE` | `2e39e70496aa02986ca6a820c5d497e816b69d7e` |
