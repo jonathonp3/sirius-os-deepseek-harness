@@ -7,7 +7,7 @@
 
 Name:           sirius-os-deepseek-harness
 Version:        %{_dsh_rpm_version}
-Release:        6%{?dist}
+Release:        7%{?dist}
 Summary:        Agent harness workspace
 License:        MIT
 URL:            https://github.com/jonathonp3/sirius-os-deepseek-harness
@@ -110,6 +110,9 @@ appstreamcli refresh-cache --force 2>/dev/null || :
 %{_datadir}/metainfo/org.jonathonp3.deepseek-harness.appdata.xml
 
 %changelog
+* Thu Nov 19 2026 Jonathon P <jonathon@sirius-os> - %{version}-7
+- Document the Node.js 24 toolchain in the appdata release notes.
+
 * Thu Nov 19 2026 Jonathon P <jonathon@sirius-os> - %{version}-6
 - Install nodejs24 explicitly in the host toolchain so Fedora COPR and
   local VM builds match CI on Node.js 24 (upstream requires node >= 24.9).
