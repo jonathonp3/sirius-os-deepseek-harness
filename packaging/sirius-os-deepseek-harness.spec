@@ -7,7 +7,7 @@
 
 Name:           sirius-os-deepseek-harness
 Version:        %{_dsh_rpm_version}
-Release:        7%{?dist}
+Release:        8%{?dist}
 Summary:        Agent harness workspace
 License:        MIT
 URL:            https://github.com/jonathonp3/sirius-os-deepseek-harness
@@ -110,6 +110,11 @@ appstreamcli refresh-cache --force 2>/dev/null || :
 %{_datadir}/metainfo/org.jonathonp3.deepseek-harness.appdata.xml
 
 %changelog
+* Fri Nov 20 2026 Jonathon P <jonathon@sirius-os> - %{version}-8
+- Desktop: add spellcheck suggestions to the editable-field context menu.
+  Chromium underlined misspelled words, but the custom Electron menu had no
+  suggestion entries, so corrections could not be applied.
+
 * Thu Nov 19 2026 Jonathon P <jonathon@sirius-os> - %{version}-7
 - Document the Node.js 24 toolchain in the appdata release notes.
 

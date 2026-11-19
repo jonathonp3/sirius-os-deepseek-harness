@@ -47,6 +47,8 @@
            apps/desktop/scripts/ files are dropped.</p>
         <p>Packages now build with Node.js 24 (nodejs24); upstream requires
            Node.js 24.9 or newer.</p>
+        <p>Editable fields now offer spelling suggestions in the context
+           menu.</p>
       </description>
     </release>
     <release version="0.2.2-rc.1" date="2026-11-11">
