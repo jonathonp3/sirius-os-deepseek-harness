@@ -198,6 +198,11 @@ diff -u --label "a/<path>" --label "b/<path>" \
 make repin
 ```
 
+If upstream deletes a patched file, drop that patch; if it relocates the
+file, move the patch to the new path and regenerate it against the new tree
+(see the 0.2.2-rc.5 re-pin, which moved the desktop-update patches to
+`apps/desktop-publisher/src/`).
+
 Once all patches apply cleanly and the build succeeds, repin writes the
 new `PIN` value into `PIN_BASELINE`:
 
@@ -222,6 +227,11 @@ Binary files (currently only `icon-linux.png)` cannot be represented as
 text diffs and are stored as full copies in source-patches/.
 `linux-build-patch.sh `handles both forms: `.patch` files via `patch -p1`,
 non-`.patch` files via `cp`.
+
+Patch paths mirror the upstream tree, so a re-pin that relocates or removes a
+patched module needs the matching patch moved or dropped. The 0.2.2-rc.5
+re-pin moved the Linux desktop-update patches from `apps/desktop/scripts/` to
+`apps/desktop-publisher/src/` after upstream relocated those modules.
 
 ---
 
@@ -254,7 +264,7 @@ Two GitHub Actions workflows run when a version tag (`v*`) is pushed or when man
 - `.github/workflows/release.yml` builds the AppImage on Ubuntu and publishes it to the GitHub Release for that tag.
 - `.github/workflows/copr.yml` builds the SRPM in a Fedora container and submits it to COPR. The SRPM is also attached to the GitHub Release.
 
-The version in `source-patches/apps/desktop/package.json` must match the tag, without the leading `v` (for example, tag `v0.2.2-alpha.3` matches version `0.2.2-alpha.3`). Both workflows verify this on tag pushes.
+The upstream package version at `PIN` (`apps/desktop/package.json`) must match the tag, without the leading `v` (for example, tag `v0.2.2-rc.5` matches version `0.2.2-rc.5`). Both workflows verify this on tag pushes.
 
 
 ## Layout

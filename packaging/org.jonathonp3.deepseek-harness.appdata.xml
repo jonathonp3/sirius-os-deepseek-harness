@@ -39,6 +39,14 @@
     <keyword>harness</keyword>
   </keywords>
   <releases>
+    <release version="0.2.2-rc.5" date="2026-11-19">
+      <description>
+        <p>Re-pin to upstream 2e39e70 (0.2.2-rc.5). The Linux desktop-update
+           target patches are retargeted to the relocated
+           apps/desktop-publisher/src/ modules; the patches for the removed
+           apps/desktop/scripts/ files are dropped.</p>
+      </description>
+    </release>
     <release version="0.2.2-rc.1" date="2026-11-11">
       <description>
         <p>Re-pin to upstream fcc0ad4. Adds the Linux CLI launcher at

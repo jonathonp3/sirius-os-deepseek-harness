@@ -1,5 +1,5 @@
---- a/apps/desktop/scripts/desktop-release-store.ts
-+++ b/apps/desktop/scripts/desktop-release-store.ts
+--- a/apps/desktop-publisher/src/desktop-release-store.ts
++++ b/apps/desktop-publisher/src/desktop-release-store.ts
 @@ -17,7 +17,7 @@
    channel: z.enum(['nightly', 'stable']),
    runnerName: z.string().min(1),

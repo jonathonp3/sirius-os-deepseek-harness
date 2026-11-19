@@ -1,20 +1,21 @@
 --- a/apps/desktop-host/src/index.ts
 +++ b/apps/desktop-host/src/index.ts
-@@ -18,12 +18,17 @@
+@@ -15,6 +15,7 @@
+ import { installDesktopQuitInspection } from './quit-inspection.ts'
  import { installPlatformSessionPublisher } from './platform-session.ts'
- import { installOfficeEngineResolution } from './office-engine.ts'
  import { installOperationDiagnostics } from './operation-diagnostics.ts'
 +import { installSharpWasmResolution } from './sharp-wasm.ts'
+ import { DesktopAuthenticationEnd, receiveDesktopSecret } from './authentication.ts'
+ import * as DesktopAuthentication from '@deepseek-ai/dsh-host-authentication-desktop'
  
- async function main(): Promise<void> {
-   const runId = randomUUID() as PluginOperationRunId
-   if (process.connected) process.send?.({ type: 'starting', runId }, (error) => { if (error !== null) console.error(error) })
+@@ -40,6 +41,10 @@
+   }
    const runtimeDir = process.argv[2] as string
    const projectDir = process.argv[3] as string
 +  // Linux: refuse sharp's native backends so it runs its WebAssembly build. The
 +  // native Linux backend links its own static GLib, which collides with Electron's,
 +  // and image work crashes the Host with SIGSEGV. Off Linux the hook is a no-op.
 +  installSharpWasmResolution(runtimeDir, process.platform)
-   installOfficeEngineResolution(runtimeDir)
+   // Set before the launch-environment snapshot and profile evaluation; empty means the payload sits beside the runtime directory.
+   process.env.DSH_PRIMARY_RUNTIME = process.argv[4] || join(runtimeDir, '..', 'runtime', 'primary-runtime')
    const installAnchor = join(runtimeDir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')
-   const profile = loadProfileDirectory('dsh', projectDir, installAnchor)

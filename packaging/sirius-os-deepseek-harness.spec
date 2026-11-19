@@ -7,7 +7,7 @@
 
 Name:           sirius-os-deepseek-harness
 Version:        %{_dsh_rpm_version}
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        Agent harness workspace
 License:        MIT
 URL:            https://github.com/jonathonp3/sirius-os-deepseek-harness
@@ -110,6 +110,14 @@ appstreamcli refresh-cache --force 2>/dev/null || :
 %{_datadir}/metainfo/org.jonathonp3.deepseek-harness.appdata.xml
 
 %changelog
+* Thu Nov 19 2026 Jonathon P <jonathon@sirius-os> - %{version}-5
+- Re-pin to upstream 2e39e70 (0.2.2-rc.5).
+- Retarget the Linux desktop-update patches to apps/desktop-publisher/src/
+  (upstream relocated those modules) and drop the patches for the removed
+  apps/desktop/scripts/ files.
+- Update appdata release version to 0.2.2-rc.5.
+- Build the AppImage with Node.js 24; upstream now requires node >= 24.9.
+
 * Wed Nov 11 2026 Jonathon P <jonathon@sirius-os> - %{version}-4
 - Resize icon to 512x512 to match the hicolor/512x512/apps install
   path (was 1104x1104, which violates the icon theme spec).

@@ -1,5 +1,5 @@
---- a/apps/desktop/scripts/desktop-auto-update-environment.d.mts
-+++ b/apps/desktop/scripts/desktop-auto-update-environment.d.mts
+--- a/apps/desktop-publisher/src/desktop-auto-update-environment.d.mts
++++ b/apps/desktop-publisher/src/desktop-auto-update-environment.d.mts
 @@ -5,7 +5,7 @@
  export type DesktopAutoUpdateEnvironment = 'test' | 'production'
  
