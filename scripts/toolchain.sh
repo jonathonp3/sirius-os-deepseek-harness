@@ -39,12 +39,15 @@ echo "==> Detected package manager: $PM"
 # Install
 # ---------------------------------------------------------------------------
 if [ "$PM" = "dnf" ]; then
-  # --skip-broken tolerates the Fedora 45 alternatives conflict between the
-  # unversioned nodejs package and an already-installed nodejs22. On a clean
-  # container (no nodejs22), nodejs installs normally.
+  # Pin Node.js 24 explicitly. The unversioned `nodejs` metapackage is
+  # not a reliable way to get the latest version: on Fedora 45 it still pulls
+  # nodejs22 (nodejs.x86_64 requires nodejs22 = 1:22.23.1-4.fc45), which is
+  # below upstream's required >=24.9. On Fedora 44, the `nodejs` metapackage
+  # does not exist. The `nodejs24` package is available on both releases and
+  # satisfies the engine constraint, so request it by name.
   $SUDO dnf install -y --skip-broken \
     git \
-    nodejs nodejs-devel nodejs-packaging \
+    nodejs24 nodejs24-devel nodejs-packaging \
     gcc gcc-c++ make \
     python3 \
     nss nspr \
