@@ -1,0 +1,27 @@
+--- a/apps/desktop/src/main.ts
++++ b/apps/desktop/src/main.ts
+@@ -339,9 +339,23 @@
+     window.on('restore', applyBackdrop)
+     window.on('show', applyBackdrop)
+   }
+-  window.webContents.on('context-menu', (_event, { isEditable, selectionText, editFlags }) => {
++  window.webContents.on('context-menu', (_event, params) => {
++    const { isEditable, selectionText, editFlags } = params
+     const items: MenuItemConstructorOptions[] = []
+     if (isEditable) {
++      // Chromium's spellchecker only underlines a misspelled word; without menu
++      // items for its suggestions the correction can never be applied.
++      if (params.misspelledWord.length > 0) {
++        for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
++          items.push({
++            label: suggestion,
++            click: () => {
++              if (!window.isDestroyed()) window.webContents.replaceMisspelling(suggestion)
++            },
++          })
++        }
++        if (items.length > 0) items.push({ type: 'separator' })
++      }
+       items.push(
+         { role: 'undo', enabled: editFlags.canUndo },
+         { role: 'redo', enabled: editFlags.canRedo },
